@@ -35,13 +35,21 @@
 
 ```bash
 # ① 放好 Cloudflare 隧道凭证（不入库）
+#    先 cd 到本项目根目录，再执行 —— 脚本用相对路径。
 mkdir -p ~/.config/vibecotion && chmod 700 ~/.config/vibecotion
-printf 'TUNNEL_TOKEN=%s\n' '<你的 token>' > ~/.config/vibecotion/cloudflared.env
+
+# ⚠️ 下面这行里的「你的真实 token」必须替换成 Cloudflare 面板上的实际值。
+#    不要照抄尖括号文字 —— 那会被当成真实凭证写进去，隧道连不上。
+#    真实 token 形如 eyJhIjoi...（通常上百字符）。
+printf 'TUNNEL_TOKEN=%s\n' '你的真实 token' > ~/.config/vibecotion/cloudflared.env
 chmod 600 ~/.config/vibecotion/cloudflared.env
 
 # ② 部署
 ./scripts/install.sh
 ```
+
+> 凭证在两处获取：Cloudflare 面板 → **Zero Trust** → **Networks** → **Tunnels** → 你的隧道 → 复制 token。
+> 安装脚本会校验它**不是占位符、长度合理**，不合格会明确报错而不是静默通过。
 
 访问 <https://vibecotion.wraindrock.com>（需先在 Cloudflare 面板配好隧道路由）。
 

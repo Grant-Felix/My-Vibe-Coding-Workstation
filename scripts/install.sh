@@ -73,13 +73,38 @@ preflight() {
   fi
 
   # 端口占用检查
+  # 端口来自声明，不硬编码。
+  local port
+  port="$(decl_get pod.publishPort)"; port="${port//\"/}"
+  [ -n "$port" ] || port=9999
+
   if command -v ss >/dev/null 2>&1; then
-    if ss -tln 2>/dev/null | grep -qE ':(9999)\b'; then
-      warn "端口 9999 已被占用："
-      ss -tlnp 2>/dev/null | grep -E ':(9999)\b' | sed 's/^/    /' || true
-      die  "请先释放 9999，或修改 quadlet/${PREFIX}.pod 与网关单元中的端口"
+    if ss -tln 2>/dev/null | grep -qE ":(\$port)\b"; then
+      # 关键：区分「我们上次留下的」与「别人的服务」。
+      # 前者是部署失败后的正常残留，应当自动接管，而不是让用户手工清理。
+      if podman pod exists "$PREFIX" 2>/dev/null; then
+        warn "端口 $port 被本项目上次的 Pod（${PREFIX}）占用，正在接管"
+        if podman pod rm -f "$PREFIX" >/dev/null 2>&1; then
+          ok "已移除旧 Pod，端口 $port 释放"
+          # 给内核一点时间回收 socket
+          local i; for i in 1 2 3 4 5; do
+            ss -tln 2>/dev/null | grep -qE ":(\$port)\b" || break
+            sleep 1
+          done
+        else
+          warn "旧 Pod 移除失败，请手动执行：podman pod rm -f $PREFIX"
+        fi
+      fi
+
+      if ss -tln 2>/dev/null | grep -qE ":(\$port)\b"; then
+        warn "端口 $port 仍被占用：${C_DIM}（此处重新探测，非上面的旧记录）${C_R}"
+        ss -tlnp 2>/dev/null | grep -E ":(\$port)\b" | sed 's/^/    /' || true
+        say  "  若是本项目的其它残留：podman pod rm -f $PREFIX"
+        say  "  若是别的服务：先停止它，或改 workstation.yaml 的 pod.publishPort"
+        die  "端口 $port 不可用"
+      fi
     fi
-    ok "端口 9999 空闲"
+    ok "端口 $port 空闲"
   fi
 }
 
@@ -91,13 +116,28 @@ prepare_secrets() {
   chmod 700 "$CFG_DIR"
 
   local cf_env="${HOME}/.config/vibecotion/cloudflared.env"
-  if [ -f "$cf_env" ] && grep -q '^TUNNEL_TOKEN=' "$cf_env" 2>/dev/null; then
-    chmod 600 "$cf_env"
-    ok "找到 Cloudflare Tunnel 凭证"
+  # 只判「文件存在且有键」是不够的 —— 文档里的占位符 '<你的 token>'
+  # 被原样复制时同样满足该条件，结果脚本报「✓」而隧道连不上。
+  # 因此这里做三重校验：非空 → 非占位符 → 长度合理。
+  local cf_tok=""
+  if [ -f "$cf_env" ]; then
+    cf_tok="$(sed -n 's/^TUNNEL_TOKEN=//p' "$cf_env" | head -1 | tr -d '\r"' | tr -d "'" | sed 's/[[:space:]]*$//')"
+  fi
+
+  if [ -z "$cf_tok" ]; then
+    warn "缺少 $cf_env 或其中无 TUNNEL_TOKEN"
+    say  "  Cloudflare 隧道将无法连接。从 Cloudflare 面板复制 token 后执行："
+    say  "    printf 'TUNNEL_TOKEN=%s\\n' 'eyJhIjoi...你的真实token...' > $cf_env"
+    say  "    chmod 600 $cf_env"
+  elif printf '%s' "$cf_tok" | grep -qE '<[^>]*>|YOUR_|PLACEHOLDER|xxxx'; then
+    warn "TUNNEL_TOKEN 是**占位符**，不是真实凭证"
+    say  "  当前值前 24 字符：$(printf '%s' "$cf_tok" | head -c 24)"
+    say  "  请从 Cloudflare 面板 → Zero Trust → Networks → Tunnels 复制真实 token"
+  elif [ "${#cf_tok}" -lt 40 ]; then
+    warn "TUNNEL_TOKEN 仅 ${#cf_tok} 字符，疑似不完整（真实 token 通常上百字符）"
   else
-    warn "缺少 $cf_env"
-    say  "  Cloudflare 隧道将无法连接。创建方式："
-    say  "    printf 'TUNNEL_TOKEN=%s\\n' '<你的 token>' > $cf_env && chmod 600 $cf_env"
+    chmod 600 "$cf_env"
+    ok "找到 Cloudflare Tunnel 凭证（${#cf_tok} 字符）"
   fi
 
   local oc_env="${HOME}/.config/vibecotion/opencloud.env"
@@ -237,16 +277,22 @@ seed_dsh_home() {
     return 0
   fi
 
+  # ⚠️ 绝不把宿主 ${src} 挂进容器 —— 即使加 :ro，`:Z` 也会**重打宿主目录的
+  #    SELinux 标签**为 container_file_t，从而改变用户家目录的状态。
+  #    （此坑已踩：`~/.dsh` 被改成 container_file_t，而 restorecon 在
+  #      SELinux 禁用时不生效，无法就地复原。）
+  #    改用 tar 管道：宿主读、容器写；用户数据从不进入容器的挂载命名空间。
   say "  从 ${src} 导入 DSH_HOME（profiles + 凭证）"
-  if podman run --rm \
-       -v "${vol}:/dest:Z" \
-       -v "${src}:/src:ro,Z" \
-       docker.io/library/alpine:3.20 \
-       sh -c 'cp -a /src/. /dest/ && chown -R 1000:1000 /dest' >/dev/null 2>&1; then
+  if tar -C "${src}" -cf - . 2>/dev/null \
+     | podman run --rm -i \
+         -v "${vol}:/dest:Z" \
+         docker.io/library/alpine:3.20 \
+         sh -c 'tar -C /dest -xf - && chown -R 1000:1000 /dest' >/dev/null 2>&1; then
     ok "已导入（凭证现存在于卷中，未进入仓库或镜像）"
   else
     warn "导入失败。可手动执行："
-    say "    podman run --rm -v ${vol}:/dest:Z -v ${src}:/src:ro,Z alpine:3.20 sh -c 'cp -a /src/. /dest/'"
+    say "    tar -C ${src} -cf - . | podman run --rm -i -v ${vol}:/dest:Z \\"
+    say "      alpine:3.20 sh -c 'tar -C /dest -xf - && chown -R 1000:1000 /dest'"
   fi
 }
 

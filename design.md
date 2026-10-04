@@ -28,16 +28,58 @@
 部署后，宿主上只允许存在以下位置。**除此之外任何新增都是 bug**：
 
 ```
-~/.config/containers/systemd/            # Quadlet 单元（由 config 生成）
+~/.config/containers/systemd/            # Quadlet 产物（由 render.sh 生成）
 ~/.local/share/containers/storage/       # podman rootless 存储（镜像/卷）
-~/.local/state/vibecotion/         # manifest.json + 日志
-~/.config/vibecotion/              # 用户可改的配置覆盖
-/run/user/$UID/                         # podman 运行时（临时，登出清空）
+~/.config/vibecotion/                    # 派生配置 + 门户 + 凭证
+/run/user/$UID/                          # podman 运行时（临时，登出清空）
 ```
 
 > ⚠️ 注意 `~/.local/share/containers/storage/` 是 podman 的共享存储，
 > **卸载时绝不能整个删除** —— 用户可能有其他容器。
-> 必须按 manifest 登记的资源逐个回收。这是 A2 与「不误伤」的分界线。
+> 必须按前缀逐个回收。这是 A2 与「不误伤」的分界线。
+
+### 宿主数据保护：不要把用户目录挂进容器
+
+> ⚠️ **容器挂载会改变宿主目录的状态，即使挂载是只读的。**
+
+**踩过的坑（真实事故）**：
+
+导入 DSH 凭证时用了
+
+```bash
+podman run -v ~/.dsh:/src:ro,Z ...   # ← 错
+```
+
+本意是「只读，安全」。但 `:Z` 的语义是**重打 SELinux 标签**，
+它作用于**宿主源目录**，与挂载是否只读无关。结果：
+
+```
+~/.dsh     → container_file_t:s0:c237,c703   ← 被改成容器标签
+~/.config  → config_home_t                    ← 对照：正常用户标签
+```
+
+**影响**：该机 SELinux 当前为 `Disabled`，标签是惰性的，暂无功能影响。
+但若日后启用 SELinux（`/etc/selinux/config` 已写 `SELINUX=enforcing`），
+`~/.dsh` 带 `container_file_t` 可能导致 DSH 被拒绝读取自己的凭证。
+且 `restorecon` 在 SELinux 禁用时**不生效**，无法就地复原。
+
+**正确做法：用管道，而不是挂载**
+
+```bash
+tar -C ~/.dsh -cf - . | podman run --rm -i -v "${vol}:/dest:Z" \
+  alpine:3.20 sh -c "tar -C /dest -xf -"
+```
+
+用户数据由**宿主**读取，从不进入容器的挂载命名空间 ——
+因此不存在任何重打标签的机会。
+
+**推广到一般规则**：
+
+| 要挂载的对象 | 是否可用 `:Z` |
+|---|---|
+| 本项目自己的目录（`~/.config/vibecotion/`） | ✅ 可以（本就是我们的） |
+| **用户的其它数据**（`~/.dsh`、`~/项目/`、家目录） | ❌ **禁止**；用管道或 `podman cp` |
+| podman 命名卷 | ✅ 可以 |
 
 ### 工具链
 
@@ -315,6 +357,7 @@ uninstall.sh --nuke        # 以上 + 清理 podman 残留 (system prune)
 | D16 | 入口模式 | 保留 **Pod 端口映射 9999**（不采用 Wraindrock D5 的 Network=host + 127.0.0.1:8080） |
 | D17 | 基础发行版 | 自建镜像统一用 **Fedora**（当前 44，与宿主同源）；可升级，但需显式执行且**仅限稳定版** |
 | D18 | Node 工具链 | **fnm + Node LTS 最新版**（不用发行版 nodejs）；npm/pnpm/yarn 随之提供 |
+| D19 | 宿主数据保护 | **禁止**把用户数据目录（`~/.dsh`、家目录）挂进容器；改用 tar 管道。`:Z` 会重打宿主标签 |
 
 ### 待确认（阻塞项）
 
