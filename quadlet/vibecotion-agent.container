@@ -7,18 +7,17 @@
 # 以维持隔离性，并避免卸载清单多出宿主侧外部依赖。
 [Unit]
 Description=Vibe WS: Agent (DSH)
-After=vibe-ws-network.service
-Requires=vibe-ws-network.service
+After=vibecotion-network.service
+Requires=vibecotion-network.service
 
 [Container]
-ContainerName=vibe-ws-agent
+ContainerName=vibecotion-agent
 # ⚠️ 占位镜像：DSH 的容器化镜像需在实施阶段确定。
 #    下面用带 Node 的基础镜像占位，安装步骤由 install.sh 注入。
 Image=docker.io/library/node:24-bookworm-slim
-Pod=vibe-ws.pod
-Network=vibe-ws.network
+Pod=vibecotion.pod
 
-Volume=vibe-ws-agent-data.volume:/home/agent:Z
+Volume=vibecotion-agent-data.volume:/home/agent:Z
 
 # DSH Web 默认端口
 Environment=NODE_ENV=production

@@ -27,13 +27,13 @@
 	# ---------- Agent (DSH) ----------
 	@agent host agent.vibecotion.wraindrock.com
 	handle @agent {
-		reverse_proxy vibe-ws-agent:3080
+		reverse_proxy vibecotion-agent:3080
 	}
 
 	# ---------- Forgejo ----------
 	@forgejo host git.vibecotion.wraindrock.com
 	handle @forgejo {
-		reverse_proxy vibe-ws-forgejo:3000
+		reverse_proxy vibecotion-forgejo:3000
 	}
 
 	# ---------- OpenCloud ----------
@@ -41,7 +41,7 @@
 	# 由 OpenCloud 内部按其 OC_DOMAIN 处理。
 	@cloud host cloud.vibecotion.wraindrock.com
 	handle @cloud {
-		reverse_proxy vibe-ws-opencloud:9200 {
+		reverse_proxy vibecotion-opencloud:9200 {
 			header_up Host {host}
 			header_up X-Forwarded-Proto https
 			header_up X-Forwarded-Host {host}
@@ -52,17 +52,17 @@
 	# 三个环境共享镜像层，但各自独立容器与数据卷（互不污染）。
 	@dev host dev.vibecotion.wraindrock.com
 	handle @dev {
-		reverse_proxy vibe-ws-workbench-dev:8080
+		reverse_proxy vibecotion-workbench-dev:8080
 	}
 
 	@test host test.vibecotion.wraindrock.com
 	handle @test {
-		reverse_proxy vibe-ws-workbench-test:8080
+		reverse_proxy vibecotion-workbench-test:8080
 	}
 
 	@staging host staging.vibecotion.wraindrock.com
 	handle @staging {
-		reverse_proxy vibe-ws-workbench-staging:8080
+		reverse_proxy vibecotion-workbench-staging:8080
 	}
 
 	# ---------- 兜底 ----------

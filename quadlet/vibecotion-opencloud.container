@@ -8,14 +8,13 @@
 # OC_URL 必须是**外部实际访问地址**，否则生成的绝对链接错误。
 [Unit]
 Description=Vibe WS: OpenCloud
-After=vibe-ws-network.service
-Requires=vibe-ws-network.service
+After=vibecotion-network.service
+Requires=vibecotion-network.service
 
 [Container]
-ContainerName=vibe-ws-opencloud
+ContainerName=vibecotion-opencloud
 Image=docker.io/opencloudeu/opencloud-rolling:8.0.1
-Pod=vibe-ws.pod
-Network=vibe-ws.network
+Pod=vibecotion.pod
 
 # 官方镜像以 1000:1000 运行
 User=1000:1000
@@ -24,8 +23,8 @@ User=1000:1000
 # 随后启动服务。密钥落在持久卷，重建容器不会变——这是必需的。
 Exec=/bin/sh -c "opencloud init || true; opencloud server"
 
-Volume=vibe-ws-opencloud-config.volume:/etc/opencloud:Z
-Volume=vibe-ws-opencloud-data.volume:/var/lib/opencloud:Z
+Volume=vibecotion-opencloud-config.volume:/etc/opencloud:Z
+Volume=vibecotion-opencloud-data.volume:/var/lib/opencloud:Z
 
 # 外部访问地址（经网关 + Cloudflare），OpenCloud 据此生成链接
 Environment=OC_URL=https://cloud.vibecotion.wraindrock.com
@@ -35,7 +34,7 @@ Environment=PROXY_TLS=false
 Environment=OC_INSECURE=false
 Environment=OC_LOG_LEVEL=info
 # 初始管理员密码：由 install.sh 从本地凭证文件注入，不硬编码
-EnvironmentFile=%h/.config/vibe-workstation/opencloud.env
+EnvironmentFile=%h/.config/vibecotion/opencloud.env
 # 默认语言
 Environment=OC_DEFAULT_LANGUAGE=zh_CN
 

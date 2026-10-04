@@ -1,7 +1,7 @@
 # Forgejo —— 仓库数据（强状态，卸载时按 --purge 决定是否删除）
 [Volume]
-VolumeName=vibe-ws-forgejo-data
-Label=managed-by=vibe-ws
+VolumeName=vibecotion-forgejo-data
+Label=managed-by=vibecotion
 
 [Install]
 WantedBy=default.target

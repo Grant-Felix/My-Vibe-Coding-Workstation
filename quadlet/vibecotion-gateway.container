@@ -6,23 +6,23 @@
 # 路由规则见 config/gateway/Caddyfile
 [Unit]
 Description=Vibe WS: Gateway (single entry on :9999)
-After=vibe-ws-network.service
-Requires=vibe-ws-network.service
+After=vibecotion-network.service
+Requires=vibecotion-network.service
 
 [Container]
-ContainerName=vibe-ws-gateway
+ContainerName=vibecotion-gateway
 Image=docker.io/library/caddy:2.10-alpine
-Pod=vibe-ws.pod
-Network=vibe-ws.network
+Pod=vibecotion.pod
 
-# 网关在 Pod 内监听 9999；Pod 把宿主 9999 映射到这里
-PublishPort=9999:9999
+# ⚠️ 不在此声明 Network= 或 PublishPort=：
+#    Pod 成员必须共享 Pod 的网络命名空间，端口发布由 .pod 唯一拥有。
+#    同时声明 --network 与 --pod 会被 podman 拒绝（二者互斥）。
 
-# 配置只读挂载（单一来源：仓库内 config/，由 install.sh 同步到 ~/.config/vibe-ws/）
-Volume=%h/.config/vibe-ws/Caddyfile:/etc/caddy/Caddyfile:ro,Z
-Volume=%h/.config/vibe-ws/home:/srv:ro,Z
-Volume=vibe-ws-gateway-data.volume:/data:Z
-Volume=vibe-ws-gateway-config.volume:/config:Z
+# 配置只读挂载（单一来源：仓库内 config/，由 install.sh 同步到 ~/.config/vibecotion/）
+Volume=%h/.config/vibecotion/Caddyfile:/etc/caddy/Caddyfile:ro,Z
+Volume=%h/.config/vibecotion/home:/srv:ro,Z
+Volume=vibecotion-gateway-data.volume:/data:Z
+Volume=vibecotion-gateway-config.volume:/config:Z
 
 # 配置校验失败则拒绝启动，避免静默降级
 HealthCmd=wget -q --spider http://127.0.0.1:9999/healthz || exit 1

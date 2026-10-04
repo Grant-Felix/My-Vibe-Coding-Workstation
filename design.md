@@ -30,8 +30,8 @@
 ```
 ~/.config/containers/systemd/            # Quadlet 单元（由 config 生成）
 ~/.local/share/containers/storage/       # podman rootless 存储（镜像/卷）
-~/.local/state/vibe-workstation/         # manifest.json + 日志
-~/.config/vibe-workstation/              # 用户可改的配置覆盖
+~/.local/state/vibecotion/         # manifest.json + 日志
+~/.config/vibecotion/              # 用户可改的配置覆盖
 /run/user/$UID/                         # podman 运行时（临时，登出清空）
 ```
 
@@ -225,7 +225,7 @@ uninstall.sh --nuke        # 以上 + 清理 podman 残留 (system prune)
 ```
 
 **登记清单机制**：部署时把本次创建的资源 id 写入
-`~/.local/state/vibe-workstation/manifest.json`。
+`~/.local/state/vibecotion/manifest.json`。
 卸载时**按清单精确回收**，而非盲目扫描。
 好处：不误删用户的其他容器；重复卸载幂等；可审计（`docs/UNINSTALL.md` 列出每一项）。
 
@@ -378,7 +378,7 @@ Cloudflare 代理模式下：**TLS 在 Cloudflare 边缘终止**，浏览器到�
   secret      : 48 字符（不记录）
 ```
 
-**存放位置**：`~/.config/vibe-workstation/cloudflared.env`（`chmod 600`），**不属于仓库**。
+**存放位置**：`~/.config/vibecotion/cloudflared.env`（`chmod 600`），**不属于仓库**。
 
 **三条硬规则**：
 1. **绝不提交入库** —— 本仓库是 **Public**，token 等同于隧道凭证。

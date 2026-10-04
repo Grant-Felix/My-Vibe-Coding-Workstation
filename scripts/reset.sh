@@ -13,7 +13,7 @@
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
-PREFIX="vibe-ws"
+PREFIX="vibecotion"
 
 DRY_RUN=0
 REBUILD=0

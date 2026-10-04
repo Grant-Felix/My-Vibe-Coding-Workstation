@@ -10,7 +10,7 @@
 # ⚠️ 9999 是宿主侧端口，与 OpenCloud 内部占用的 8000-9999 不冲突：
 #    内部端口在 Pod 的 network namespace 内，不落到宿主。
 [Pod]
-PodName=vibe-ws
+PodName=vibecotion
 PublishPort=9999:9999
 
 [Install]

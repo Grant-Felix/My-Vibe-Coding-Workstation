@@ -5,7 +5,7 @@
 # 原则（见 design.md 第 0 节）：宿主零依赖、写入面可枚举。
 # 本脚本只做四件事：
 #   1. 校验前置条件（不安装任何宿主包）
-#   2. 同步配置到 ~/.config/vibe-workstation（宿主的合法写入面之一）
+#   2. 同步配置到 ~/.config/vibecotion（宿主的合法写入面之一）
 #   3. 安装 Quadlet 单元并启动
 #   4. 把本次创建的资源登记进 manifest（供 uninstall.sh 精确回收）
 #
@@ -15,10 +15,10 @@ SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 
 # ---- 常量：改名只需改这里 ----
-PREFIX="vibe-ws"
-CFG_DIR="${HOME}/.config/vibe-workstation"
+PREFIX="vibecotion"
+CFG_DIR="${HOME}/.config/vibecotion"
 QUADLET_DIR="${HOME}/.config/containers/systemd"
-STATE_DIR="${HOME}/.local/state/vibe-workstation"
+STATE_DIR="${HOME}/.local/state/vibecotion"
 MANIFEST="${STATE_DIR}/manifest.json"
 LOG_DIR="${STATE_DIR}/logs"
 
@@ -81,7 +81,7 @@ prepare_secrets() {
   mkdir -p "$CFG_DIR"
   chmod 700 "$CFG_DIR"
 
-  local cf_env="${HOME}/.config/vibe-workstation/cloudflared.env"
+  local cf_env="${HOME}/.config/vibecotion/cloudflared.env"
   if [ -f "$cf_env" ] && grep -q '^TUNNEL_TOKEN=' "$cf_env" 2>/dev/null; then
     chmod 600 "$cf_env"
     ok "找到 Cloudflare Tunnel 凭证"
@@ -91,7 +91,7 @@ prepare_secrets() {
     say  "    printf 'TUNNEL_TOKEN=%s\\n' '<你的 token>' > $cf_env && chmod 600 $cf_env"
   fi
 
-  local oc_env="${HOME}/.config/vibe-workstation/opencloud.env"
+  local oc_env="${HOME}/.config/vibecotion/opencloud.env"
   if [ -f "$oc_env" ] && grep -q '^IDM_ADMIN_PASSWORD=' "$oc_env" 2>/dev/null; then
     chmod 600 "$oc_env"
     ok "找到 OpenCloud 管理员凭证"
@@ -229,8 +229,8 @@ write_manifest() {
   "pod": "${PREFIX}",
   "published_port": 9999,
   "secrets": [
-    "${HOME}/.config/vibe-workstation/cloudflared.env",
-    "${HOME}/.config/vibe-workstation/opencloud.env"
+    "${HOME}/.config/vibecotion/cloudflared.env",
+    "${HOME}/.config/vibecotion/opencloud.env"
   ]
 }
 JSON

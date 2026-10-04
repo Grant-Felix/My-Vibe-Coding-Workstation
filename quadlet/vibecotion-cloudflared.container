@@ -4,21 +4,20 @@
 # 流量路径：公网 → Cloudflare 边缘 → 本容器（出站隧道）→ 网关:9999
 #
 # ⚠️ TUNNEL_TOKEN 不写在此文件（本文件入库，仓库为 Public）。
-#    由 install.sh 从 ~/.config/vibe-workstation/cloudflared.env 读取并写入
+#    由 install.sh 从 ~/.config/vibecotion/cloudflared.env 读取并写入
 #    系统级环境文件，本单元通过 EnvironmentFile 引用。
 [Unit]
 Description=Vibe WS: Cloudflare Tunnel connector
-After=vibe-ws-gateway.service
-Requires=vibe-ws-gateway.service
+After=vibecotion-gateway.service
+Requires=vibecotion-gateway.service
 
 [Container]
-ContainerName=vibe-ws-cloudflared
+ContainerName=vibecotion-cloudflared
 Image=docker.io/cloudflare/cloudflared:latest
-Pod=vibe-ws.pod
-Network=vibe-ws.network
+Pod=vibecotion.pod
 
 # 凭证外置；文件由 install.sh 生成，权限 600
-EnvironmentFile=%h/.config/vibe-workstation/cloudflared.env
+EnvironmentFile=%h/.config/vibecotion/cloudflared.env
 
 # --no-autoupdate：容器内自更新会绕过镜像版本管理，破坏可复现性
 Exec=--no-autoupdate tunnel run

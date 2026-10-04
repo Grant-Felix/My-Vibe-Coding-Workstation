@@ -7,16 +7,15 @@
 # 可通过 reset.sh 重置回「刚安装」状态。
 [Unit]
 Description=Vibe WS: Workbench staging
-After=vibe-ws-network.service
-Requires=vibe-ws-network.service
+After=vibecotion-network.service
+Requires=vibecotion-network.service
 
 [Container]
-ContainerName=vibe-ws-workbench-staging
+ContainerName=vibecotion-workbench-staging
 Image=docker.io/library/debian:13-slim
-Pod=vibe-ws.pod
-Network=vibe-ws.network
+Pod=vibecotion.pod
 
-Volume=vibe-ws-workbench-staging.volume:/work:Z
+Volume=vibecotion-workbench-staging.volume:/work:Z
 
 Environment=WORKBENCH_ENV=staging
 Environment=WORKBENCH_PORT=8080

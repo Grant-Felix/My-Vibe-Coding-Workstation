@@ -1,7 +1,7 @@
 # 网关 —— Caddy 数据（自动证书缓存等；本架构外层由 Cloudflare 终结 TLS，实际用量极小）
 [Volume]
-VolumeName=vibe-ws-gateway-data
-Label=managed-by=vibe-ws
+VolumeName=vibecotion-gateway-data
+Label=managed-by=vibecotion
 
 [Install]
 WantedBy=default.target

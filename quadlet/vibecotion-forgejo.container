@@ -1,16 +1,15 @@
 # Vibe Coding Workstation — Forgejo（自托管 Git）
 [Unit]
 Description=Vibe WS: Forgejo
-After=vibe-ws-network.service
-Requires=vibe-ws-network.service
+After=vibecotion-network.service
+Requires=vibecotion-network.service
 
 [Container]
-ContainerName=vibe-ws-forgejo
+ContainerName=vibecotion-forgejo
 Image=docker.io/codeberg/forgejo:13
-Pod=vibe-ws.pod
-Network=vibe-ws.network
+Pod=vibecotion.pod
 
-Volume=vibe-ws-forgejo-data.volume:/data:Z
+Volume=vibecotion-forgejo-data.volume:/data:Z
 
 # 对外访问的根 URL：经网关 + Cloudflare，必须与实际访问地址一致
 Environment=FORGEJO__server__ROOT_URL=https://git.vibecotion.wraindrock.com/

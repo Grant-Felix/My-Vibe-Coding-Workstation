@@ -2,7 +2,7 @@
 # 独立网络命名空间：与宿主其他容器（felix-homelab 等）完全隔离。
 # 卸载时随 manifest 一并回收。
 [Network]
-NetworkName=vibe-ws
+NetworkName=vibecotion
 Driver=bridge
 DisableDNS=false
 

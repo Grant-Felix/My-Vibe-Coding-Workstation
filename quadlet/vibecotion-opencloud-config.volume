@@ -1,7 +1,7 @@
 # OpenCloud —— 运行时配置（含自动生成的密钥，必须持久化，否则每次重建都变）
 [Volume]
-VolumeName=vibe-ws-opencloud-config
-Label=managed-by=vibe-ws
+VolumeName=vibecotion-opencloud-config
+Label=managed-by=vibecotion
 
 [Install]
 WantedBy=default.target

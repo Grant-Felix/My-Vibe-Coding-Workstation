@@ -19,10 +19,10 @@ set -Eeuo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 
-PREFIX="vibe-ws"
-CFG_DIR="${HOME}/.config/vibe-workstation"
+PREFIX="vibecotion"
+CFG_DIR="${HOME}/.config/vibecotion"
 QUADLET_DIR="${HOME}/.config/containers/systemd"
-STATE_DIR="${HOME}/.local/state/vibe-workstation"
+STATE_DIR="${HOME}/.local/state/vibecotion"
 MANIFEST="${STATE_DIR}/manifest.json"
 
 # ---- 选项 ----
