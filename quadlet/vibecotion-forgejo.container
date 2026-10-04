@@ -6,7 +6,11 @@ Requires=vibecotion-network.service
 
 [Container]
 ContainerName=vibecotion-forgejo
-Image=docker.io/codeberg/forgejo:13
+# ⚠️ 官方镜像在 Codeberg 自己的 registry，**不在 Docker Hub**。
+#    已核实：docker.io/codeberg/forgejo 与 docker.io/forgejo/forgejo 均为 404。
+#    官方文档（forgejo.org/docs/latest/admin/installation-docker）给出
+#    Quadlet 示例即为：Image=codeberg.org/forgejo/forgejo:16
+Image=codeberg.org/forgejo/forgejo:16
 Pod=vibecotion.pod
 
 Volume=vibecotion-forgejo-data.volume:/data:Z
@@ -23,8 +27,9 @@ Environment=FORGEJO__security__INSTALL_LOCK=true
 Environment=FORGEJO__service__DISABLE_REGISTRATION=true
 
 ExposeHostPort=3000
-# 用 forgejo 自带 CLI 做探测，不依赖镜像里是否有 wget/curl。
-HealthCmd=/usr/local/bin/forgejo manager --help >/dev/null 2>&1 || test -f /data/gitea/conf/app.ini
+# 只依据数据目录判断 —— 不依赖镜像内的二进制路径或 wget/curl，
+# 那些都未经核实。app.ini 由 Forgejo 首次启动生成，是可靠的存活标志。
+HealthCmd=test -f /data/gitea/conf/app.ini
 HealthInterval=30s
 HealthTimeout=5s
 HealthRetries=5

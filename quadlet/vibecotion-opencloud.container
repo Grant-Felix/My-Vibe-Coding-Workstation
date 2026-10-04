@@ -19,9 +19,16 @@ Pod=vibecotion.pod
 # 官方镜像以 1000:1000 运行
 User=1000:1000
 
+# ⚠️ 镜像自身的 Entrypoint 是 ['/usr/bin/opencloud']。
+#    若只写 Exec=，命令会被当作 opencloud 的**子命令**追加进去
+#      → /usr/bin/opencloud /bin/sh -c ... → 无效子命令 → 容器立即退出。
+#    （真实故障：opencloud 启动失败。）已核实镜像 config.Entrypoint。
+#    因此必须显式覆盖 Entrypoint，与官方 compose 的写法一致。
+#
 # init 生成配置与随机密钥（幂等：已存在则报错，故 || true）；
-# 随后启动服务。密钥落在持久卷，重建容器不会变——这是必需的。
-Exec=/bin/sh -c "opencloud init || true; opencloud server"
+# 随后启动服务。密钥落在持久卷，重建容器不会变 —— 这是必需的。
+Entrypoint=/bin/sh
+Exec=-c "opencloud init || true; opencloud server"
 
 Volume=vibecotion-opencloud-config.volume:/etc/opencloud:Z
 Volume=vibecotion-opencloud-data.volume:/var/lib/opencloud:Z
@@ -39,8 +46,8 @@ EnvironmentFile=%h/.config/vibecotion/opencloud.env
 Environment=OC_DEFAULT_LANGUAGE=zh_CN
 
 ExposeHostPort=9200
-# 用 opencloud 自带 CLI 做探测，不依赖镜像里是否有 wget/curl。
-HealthCmd=/usr/bin/opencloud version >/dev/null 2>&1 || test -f /etc/opencloud/opencloud.yaml
+# 只依据配置目录判断 —— opencloud init 会写入该文件，是可靠的存活标志。
+HealthCmd=test -f /etc/opencloud/opencloud.yaml
 HealthInterval=30s
 HealthTimeout=5s
 HealthRetries=5
