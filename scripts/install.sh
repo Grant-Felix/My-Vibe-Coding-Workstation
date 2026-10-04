@@ -195,6 +195,22 @@ build_images() {
   say "  基础发行版：Fedora $fedora_ver"
   say "  Node 工具链：fnm $fnm_ver + Node $node_ver（npm/pnpm/yarn）"
 
+  # ── 回环代理的处理 ──────────────────────────────────────────────────
+  # 宿主的代理变量常写作 http://127.0.0.1:7897，podman 会**原样传进构建容器**。
+  # 但在容器里 127.0.0.1 指容器自己，不是宿主 ——
+  # 于是 dnf / curl 全部报 "Could not connect ... via 127.0.0.1"。
+  # （真实故障：dnf 无法访问 mirrors.fedoraproject.org，镜像构建失败。）
+  #
+  # 对策：检测到回环代理时，让构建使用**宿主网络命名空间**，
+  # 127.0.0.1 于是重新指向宿主，代理即刻可用。
+  # 代理实际监听 *:7897（所有接口），宿主网络下必然可达。
+  local build_net_args=()
+  local _proxy="${http_proxy:-}${https_proxy:-}${HTTP_PROXY:-}${HTTPS_PROXY:-}${all_proxy:-}${ALL_PROXY:-}"
+  if printf '%s' "$_proxy" | grep -qE '127\.0\.0\.1|localhost|\[::1\]'; then
+    build_net_args+=(--network host)
+    say "  $C_DIM检测到回环代理 → 构建使用宿主网络（否则容器内代理不可达）$C_R"
+  fi
+
   local d tag rc=0
   for d in "${dirs[@]}"; do
     tag="localhost/${PREFIX}-${d}:latest"
@@ -225,6 +241,7 @@ build_images() {
     # 不能丢弃 —— 构建失败时的真实原因只存在于这份日志里。
     local buildlog="$REPO_DIR/.build-$d.log"
     if podman build \
+         "${build_net_args[@]}" \
          --build-arg "FEDORA_VERSION=$fedora_ver" \
          --build-arg "NODE_VERSION=$node_ver" \
          --build-arg "FNM_VERSION=$fnm_ver" \

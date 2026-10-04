@@ -50,5 +50,6 @@ tmp/
 # 对应 DSH 的 $DSH_HOME patch 层
 workstation.local.yaml
 
-# 构建日志（失败时保留供排查）
+# 构建/安装日志（失败时保留供排查）
 .build-*.log
+.install.log
