@@ -33,3 +33,7 @@ Thumbs.db
 .cache/
 .temp/
 tmp/
+
+# 本地验证用的临时产物（截图 / headless 浏览器配置）
+.preview/
+.cr-prof/

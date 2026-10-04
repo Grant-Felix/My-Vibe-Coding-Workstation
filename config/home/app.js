@@ -19,10 +19,16 @@
            (ICONS[name] || ICONS.code) + '</svg>';
   }
 
+  /* services.json 通过 fetch 读取。
+     注意：<script src="x.json" type="application/json"> 不会加载外部内容——
+     浏览器对非 JS 类型忽略 src，textContent 恒为空。这是必须用 fetch 的原因。 */
   function loadServices() {
-    var el = document.getElementById('services-data');
-    try { return JSON.parse(el.textContent).services || []; }
-    catch (e) { return []; }
+    return fetch('services.json', { cache: 'no-store' })
+      .then(function (r) {
+        if (!r.ok) throw new Error('HTTP ' + r.status);
+        return r.json();
+      })
+      .then(function (d) { return d.services || []; });
   }
 
   function card(s) {
@@ -47,6 +53,12 @@
 
   /* 真实探测：请求各服务主机名的 /healthz，据响应更新状态灯。
      用 no-cors 以免被 CORS 阻断——只要能连上就算在线。 */
+  /* 状态灯三态：
+       .dot          中性（尚未得出结论）
+       .dot.ok       已确认在线
+       .dot.down     已确认不可达
+     卡片初始不带 ok/down，只有探测**确实失败**才转红——
+     否则首次加载时满屏红色会让人误以为系统已坏。 */
   function probe(s) {
     var dot = document.querySelector('[data-dot="' + s.id + '"]');
     if (!dot) return Promise.resolve(false);
@@ -77,13 +89,24 @@
   }
 
   function main() {
-    var services = loadServices();
     var grid = document.getElementById('grid');
-
-    services.forEach(function (s) { grid.appendChild(card(s)); });
 
     tick();
     setInterval(tick, 1000);
+
+    loadServices().then(function (services) {
+      if (!services.length) {
+        grid.innerHTML = '<p class="loaderr">服务列表加载失败（services.json）。</p>';
+        return;
+      }
+      services.forEach(function (s) { grid.appendChild(card(s)); });
+      startHealthPolling(services);
+    }).catch(function (e) {
+      grid.innerHTML = '<p class="loaderr">服务列表加载失败：' + e.message + '</p>';
+    });
+  }
+
+  function startHealthPolling(services) {
 
     function refresh() {
       Promise.all(services.map(probe)).then(function (results) {
