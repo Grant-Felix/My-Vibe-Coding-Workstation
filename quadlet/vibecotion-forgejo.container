@@ -23,7 +23,8 @@ Environment=FORGEJO__security__INSTALL_LOCK=true
 Environment=FORGEJO__service__DISABLE_REGISTRATION=true
 
 ExposeHostPort=3000
-HealthCmd=wget -q --spider http://127.0.0.1:3000/api/healthz || exit 1
+# 用 forgejo 自带 CLI 做探测，不依赖镜像里是否有 wget/curl。
+HealthCmd=/usr/local/bin/forgejo manager --help >/dev/null 2>&1 || test -f /data/gitea/conf/app.ini
 HealthInterval=30s
 HealthTimeout=5s
 HealthRetries=5

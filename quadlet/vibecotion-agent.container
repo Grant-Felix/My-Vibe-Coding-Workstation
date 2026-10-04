@@ -29,7 +29,9 @@ Environment=DSH_WEB_PORT=3080
 
 # 健康检查用 127.0.0.1（容器自身回环）；Pod 内成员共享网络命名空间，
 # 探测自身端口即可反映服务是否存活。
-HealthCmd=wget -q --spider http://127.0.0.1:3080/ || exit 1
+# 用 curl 而非 wget —— Fedora 基础镜像两者都不带，
+# 而 agent 镜像只装了 curl（见 agent/Dockerfile）。
+HealthCmd=curl -fsS -o /dev/null http://127.0.0.1:3080/ || exit 1
 HealthInterval=30s
 HealthTimeout=5s
 HealthRetries=5

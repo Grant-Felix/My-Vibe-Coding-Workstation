@@ -12,7 +12,10 @@
 # ⚠️ 不要改回 `dnf install nodejs24` —— 见 D18。
 
 ARG FEDORA_VERSION=44
-FROM registry.fedoraproject.org/fedora:${FEDORA_VERSION}
+# ⚠️ 基础镜像源必须是 quay.io —— 已实测：
+#     quay.io/fedora/fedora:44                  HTTP 200 ✅
+#     registry.fedoraproject.org/fedora:44      HTTP 404 ❌（该路径不存在）
+FROM quay.io/fedora/fedora:${FEDORA_VERSION}
 
 ENV LANG=C.UTF-8
 ENV LC_ALL=C.UTF-8
