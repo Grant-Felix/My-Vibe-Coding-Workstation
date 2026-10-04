@@ -2,7 +2,7 @@
 #
 # 预生产环境，只接受已验证产物。
 #
-# 三环境（dev/test/staging）**共享同一镜像层**（省磁盘），
+# 三环境（dev/test/staging）**共享镜像层**（省磁盘），
 # 但**数据卷与运行状态完全隔离**，互不污染。
 # 可通过 reset.sh 重置回「刚安装」状态。
 [Unit]
@@ -12,16 +12,20 @@ Requires=vibecotion-network.service
 
 [Container]
 ContainerName=vibecotion-workbench-staging
-Image=docker.io/library/debian:13-slim
+# 本地构建（见 workbench/Dockerfile）。
+# ⚠️ 不可改用 debian:13-slim 之类的基础镜像 —— 其默认命令是 bash，
+#    无 TTY 会立即退出，配合 Restart=always 形成崩溃循环。
+#    镜像必须自带常驻命令。
+Image=localhost/vibecotion-workbench:latest
 Pod=vibecotion.pod
 
 Volume=vibecotion-workbench-staging.volume:/work:Z
 
 Environment=WORKBENCH_ENV=staging
-Environment=WORKBENCH_PORT=8080
 
-ExposeHostPort=8080
-HealthCmd=test -d /work || exit 1
+# 健康检查反映「容器仍常驻」这一事实：
+# 工作台本身不监听端口，故检查工作目录存在且 PID 1 存活。
+HealthCmd=test -d /work && kill -0 1
 HealthInterval=60s
 HealthTimeout=10s
 HealthRetries=3

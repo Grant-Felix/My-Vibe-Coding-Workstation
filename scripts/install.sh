@@ -138,27 +138,41 @@ render_artifacts() {
 build_images() {
   step "构建镜像"
 
-  local tag="localhost/${PREFIX}-agent:latest"
+  # 需要本地构建的镜像：<目录> —— 目录名即镜像名后缀
+  # 这些镜像**必须**本地构建：它们携带各自的常驻命令，
+  # 换成上游同名基础镜像会导致容器立即退出（崩溃循环）。
+  local dirs=(agent workbench)
 
-  if podman image exists "$tag" 2>/dev/null; then
-    ok "镜像 $tag 已存在（跳过构建）"
-    say "  $C_DIM如需重建：podman rmi $tag 后重新运行本脚本$C_R"
-    return 0
-  fi
+  local d tag rc=0
+  for d in "${dirs[@]}"; do
+    tag="localhost/${PREFIX}-${d}:latest"
 
-  if [ ! -f "$REPO_DIR/agent/Dockerfile" ]; then
-    warn "缺少 agent/Dockerfile，跳过构建"
-    return 0
-  fi
+    if podman image exists "$tag" 2>/dev/null; then
+      ok "镜像 $tag 已存在（跳过构建）"
+      say "  $C_DIM如需重建：podman rmi $tag 后重新运行本脚本$C_R"
+      continue
+    fi
 
-  say "  构建 $tag（首次较慢，需拉取 node 基础镜像）"
-  if podman build -t "$tag" -f "$REPO_DIR/agent/Dockerfile" "$REPO_DIR/agent" >/dev/null 2>&1; then
-    ok "已构建 $tag"
-  else
-    warn "构建失败。手动查看："
-    say "    podman build -t $tag -f $REPO_DIR/agent/Dockerfile $REPO_DIR/agent"
-    warn "agent 容器将无法启动（其余服务不受影响）"
+    if [ ! -f "$REPO_DIR/$d/Dockerfile" ]; then
+      warn "缺少 $d/Dockerfile，跳过"
+      rc=1
+      continue
+    fi
+
+    say "  构建 $tag（首次较慢）"
+    if podman build -t "$tag" -f "$REPO_DIR/$d/Dockerfile" "$REPO_DIR/$d" >/dev/null 2>&1; then
+      ok "已构建 $tag"
+    else
+      warn "构建失败。手动查看："
+      say "    podman build -t $tag -f $REPO_DIR/$d/Dockerfile $REPO_DIR/$d"
+      rc=1
+    fi
+  done
+
+  if [ "$rc" != 0 ]; then
+    warn "有镜像未能构建，对应服务将无法启动（其余服务不受影响）"
   fi
+  return 0
 }
 
 # ---- 导入 DSH_HOME ----

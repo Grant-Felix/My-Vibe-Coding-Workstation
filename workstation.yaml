@@ -81,8 +81,9 @@ services:
       - vibecotion-opencloud-data:/var/lib/opencloud
 
   workbench:
-    image: docker.io/library/debian:13-slim
-    port: 8080
+    image: localhost/vibecotion-workbench:latest
+    build: workbench
+    # 不监听端口：工作台是常驻容器，供 podman exec 进入使用
     instances: [dev, test, staging]
     volumes:
       - vibecotion-workbench-{env}:/work
