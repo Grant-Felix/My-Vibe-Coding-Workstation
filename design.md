@@ -252,6 +252,7 @@ uninstall.sh --nuke        # 以上 + 清理 podman 残留 (system prune)
 | D11 | 对外暴露方式 | **Cloudflare Tunnel**（`cloudflare/cloudflared` 容器，出站连接） |
 | D12 | 路由方式 | **按域名**（`Host(...)` 匹配），非路径路由 |
 | D13 | 隧道凭证 | token 存于**本地 gitignored 文件**，**绝不入库**（仓库为 Public） |
+| D14 | Agent 接入 | **DSH 在容器内独立安装**，不挂载宿主安装（维持隔离与可卸载性） |
 
 ### 待确认（阻塞项）
 
@@ -405,6 +406,49 @@ Cloudflare 代理模式下：**TLS 在 Cloudflare 边缘终止**，浏览器到�
 
 > 通配符证书 + 通配符隧道路由（`*.vibecotion.wraindrock.com`）可省去逐个配置，
 > 但需在 Cloudflare 面板为每条主机名配置 Tunnel 的 Public Hostname 映射。
+
+### Cloudflare 面板配置核查（实测 + 截图）
+
+**隧道名**：`Wraindrock`，id `be1ad0ec-090f-4a09-9bb9-17def19c0e24`
+
+面板现有三条路由（截图实读）：
+
+| 顺序 | 目标 | 服务 |
+|---|---|---|
+| 1 | `www.wraindrock.com` | `https://localhost:45677` |
+| 2 | `vvibecotion.wraindrock.com` | `https://localhost:45678` |
+| 3 | `*.wraindrock.com` | `https://localhost:45679` |
+
+**发现三个问题：**
+
+#### 🔴 P1：主机名拼写不符（已用 DNS 证实）
+
+| 主机名 | DNS 结果 | 结论 |
+|---|---|---|
+| `vibecotion.wraindrock.com`（单 v，需求） | `Status:3` **NXDOMAIN** | **记录不存在** |
+| `vvibecotion.wraindrock.com`（双 v，面板） | `Status:0` → `172.67.133.185` | 记录存在 |
+
+面板多输了一个 `v`。**两条路可选**：改面板为单 v，或改用双 v 作为正式域名。
+
+#### 🔴 P2：`localhost` 指向错误的目标
+
+Cloudflare Tunnel 的 `localhost` 指的是 **cloudflared 容器自身**，不是宿主机。
+本架构为 **cloudflared → 网关容器**，因此目标必须是**网关容器在 Pod 网络中的地址**：
+
+```
+❌ https://localhost:45678          # cloudflared 容器自己，无服务
+✅ http://gateway:9999             # Pod 内网关容器（同一 network namespace）
+```
+
+#### 🔴 P3：三个不同端口违背单端口架构
+
+45677 / 45678 / 45679 是三条**独立**目标，等同于"每个服务各自暴露"，
+与「对外单端口 + 网关统一路由」的架构冲突。
+**正确形态：三条规则全部指向同一个网关** `http://gateway:9999`，
+由网关按 `Host` 头分流到各容器。
+
+> 另注：官方 `cloudflare/cloudflared` 容器的 `--url` 常用 `http://` 而非 `https://`；
+> 若网关只监听明文 HTTP，配 `https://` 会握手失败。见实施阶段确认。
 
 ---
 
