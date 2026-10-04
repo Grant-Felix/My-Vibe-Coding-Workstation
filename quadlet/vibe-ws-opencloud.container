@@ -1,0 +1,54 @@
+# Vibe Coding Workstation — OpenCloud
+#
+# ⚠️ 本项目自行解决了两处官方 compose 不适用的问题（见 design.md 4.1）：
+#   1. 官方 Traefik 挂载 docker.sock 且不可关闭 → 不用官方 Traefik，
+#      由本 Pod 的网关（Caddy）承担反代，OpenCloud 自身只跑主服务。
+#   2. 官方通过 Traefik 按 Host 路由 → 由网关按 Host 转发并保留 Host 头。
+#
+# OC_URL 必须是**外部实际访问地址**，否则生成的绝对链接错误。
+[Unit]
+Description=Vibe WS: OpenCloud
+After=vibe-ws-network.service
+Requires=vibe-ws-network.service
+
+[Container]
+ContainerName=vibe-ws-opencloud
+Image=docker.io/opencloudeu/opencloud-rolling:8.0.1
+Pod=vibe-ws.pod
+Network=vibe-ws.network
+
+# 官方镜像以 1000:1000 运行
+User=1000:1000
+
+# init 生成配置与随机密钥（幂等：已存在则报错，故 || true）；
+# 随后启动服务。密钥落在持久卷，重建容器不会变——这是必需的。
+Exec=/bin/sh -c "opencloud init || true; opencloud server"
+
+Volume=vibe-ws-opencloud-config.volume:/etc/opencloud:Z
+Volume=vibe-ws-opencloud-data.volume:/var/lib/opencloud:Z
+
+# 外部访问地址（经网关 + Cloudflare），OpenCloud 据此生成链接
+Environment=OC_URL=https://cloud.vibecotion.wraindrock.com
+# 网关在 Pod 内，明文 HTTP 转发；TLS 由 Cloudflare 边缘终结
+Environment=PROXY_TLS=false
+# 自签/边缘证书场景需要跳过校验（Pod 内不涉及，保守开启）
+Environment=OC_INSECURE=false
+Environment=OC_LOG_LEVEL=info
+# 初始管理员密码：由 install.sh 从本地凭证文件注入，不硬编码
+EnvironmentFile=%h/.config/vibe-workstation/opencloud.env
+# 默认语言
+Environment=OC_DEFAULT_LANGUAGE=zh_CN
+
+ExposeHostPort=9200
+HealthCmd=wget -q --spider http://127.0.0.1:9200/ || exit 1
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=5
+HealthStartPeriod=120s
+
+[Service]
+Restart=always
+TimeoutStartSec=300
+
+[Install]
+WantedBy=default.target

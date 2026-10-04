@@ -1,0 +1,7 @@
+# OpenCloud —— 用户文件数据
+[Volume]
+VolumeName=vibe-ws-opencloud-data
+Label=managed-by=vibe-ws
+
+[Install]
+WantedBy=default.target

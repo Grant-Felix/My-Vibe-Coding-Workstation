@@ -1,0 +1,10 @@
+{
+  "services": [
+    { "id": "agent",   "name": "Agent",     "desc": "AI 编码代理 · DeepSeek Harness", "host": "agent.vibecotion.wraindrock.com",   "icon": "terminal", "accent": "#7c5cff", "health": "/healthz" },
+    { "id": "forgejo", "name": "Forgejo",   "desc": "自托管 Git 仓库与协作",           "host": "git.vibecotion.wraindrock.com",     "icon": "git",      "accent": "#fb7185", "health": "/healthz" },
+    { "id": "cloud",   "name": "OpenCloud", "desc": "文件存储与同步",                  "host": "cloud.vibecotion.wraindrock.com",   "icon": "cloud",    "accent": "#38bdf8", "health": "/healthz" },
+    { "id": "dev",     "name": "Workbench · Dev",     "desc": "日常开发环境",           "host": "dev.vibecotion.wraindrock.com",     "icon": "code",     "accent": "#34d399", "health": "/healthz" },
+    { "id": "test",    "name": "Workbench · Test",    "desc": "测试环境（干净基线）",   "host": "test.vibecotion.wraindrock.com",    "icon": "flask",    "accent": "#fbbf24", "health": "/healthz" },
+    { "id": "staging", "name": "Workbench · Staging", "desc": "预生产环境",             "host": "staging.vibecotion.wraindrock.com", "icon": "rocket",   "accent": "#f472b6", "health": "/healthz" }
+  ]
+}

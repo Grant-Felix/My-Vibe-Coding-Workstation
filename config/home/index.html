@@ -1,0 +1,35 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Vibe Coding Workstation</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="aurora" aria-hidden="true"></div>
+
+<main class="wrap">
+  <header class="hero">
+    <div class="mark">VW</div>
+    <div>
+      <h1>Vibe Coding Workstation</h1>
+      <p class="sub">隔离的容器化开发工作站 · <span class="mono">vibecotion.wraindrock.com</span></p>
+    </div>
+    <div id="clock" class="clock" aria-live="off"></div>
+  </header>
+
+  <section class="grid" id="grid">
+    <!-- 卡片由 app.js 依据 services.json 渲染 -->
+  </section>
+
+  <footer class="foot">
+    <span id="status-summary">正在检测服务状态…</span>
+    <span class="dim">Pod <span class="mono">vibe-ws</span> · 单端口 <span class="mono">9999</span></span>
+  </footer>
+</main>
+
+<script src="services.json" type="application/json" id="services-data"></script>
+<script src="app.js"></script>
+</body>
+</html>

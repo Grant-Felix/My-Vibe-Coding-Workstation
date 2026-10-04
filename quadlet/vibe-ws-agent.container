@@ -1,0 +1,41 @@
+# Vibe Coding Workstation — Agent 容器
+#
+# 默认 agent：DeepSeek Harness（DSH）。
+# 设计为**可替换**：换掉 Image 即可切换 agent，其余（网络/卷/路由）不变。
+#
+# DSH 在**容器内独立安装**（决策 D14）——不挂载宿主安装，
+# 以维持隔离性，并避免卸载清单多出宿主侧外部依赖。
+[Unit]
+Description=Vibe WS: Agent (DSH)
+After=vibe-ws-network.service
+Requires=vibe-ws-network.service
+
+[Container]
+ContainerName=vibe-ws-agent
+# ⚠️ 占位镜像：DSH 的容器化镜像需在实施阶段确定。
+#    下面用带 Node 的基础镜像占位，安装步骤由 install.sh 注入。
+Image=docker.io/library/node:24-bookworm-slim
+Pod=vibe-ws.pod
+Network=vibe-ws.network
+
+Volume=vibe-ws-agent-data.volume:/home/agent:Z
+
+# DSH Web 默认端口
+Environment=NODE_ENV=production
+Environment=DSH_PORT=3080
+Environment=HOME=/home/agent
+
+# 内部端口，不对宿主发布（发布在 .pod 上的 9999）
+ExposeHostPort=3080
+HealthCmd=wget -q --spider http://127.0.0.1:3080/ || exit 1
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=5
+HealthStartPeriod=60s
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

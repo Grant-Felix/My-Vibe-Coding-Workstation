@@ -1,0 +1,7 @@
+# Agent (DSH) —— 会话与配置持久化
+[Volume]
+VolumeName=vibe-ws-agent-data
+Label=managed-by=vibe-ws
+
+[Install]
+WantedBy=default.target

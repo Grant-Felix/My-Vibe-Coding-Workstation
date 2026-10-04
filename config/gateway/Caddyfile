@@ -1,0 +1,73 @@
+# Vibe Coding Workstation — 网关路由
+#
+# 唯一入口：Pod 内监听 :9999，宿主 9999 映射到此。
+# 分流依据：Host 头（域名路由）。选域名而非路径，因为 OpenCloud 硬依赖 Host 匹配。
+#
+# ⚠️ 全部服务名是 Pod 网络内的 DNS 名，由 Podman 的 network 提供。
+
+{
+	# 网关自身不对外管理；关闭自动 HTTPS —— TLS 由 Cloudflare 边缘终结
+	auto_https off
+	admin off
+}
+
+# 健康检查端点（cloudflared / podman healthcheck 用）
+:9999 {
+	route /healthz {
+		respond "ok" 200
+	}
+
+	# ---------- Home 门户（默认） ----------
+	@home host vibecotion.wraindrock.com www.wraindrock.com
+	handle @home {
+		root * /srv
+		file_server
+	}
+
+	# ---------- Agent (DSH) ----------
+	@agent host agent.vibecotion.wraindrock.com
+	handle @agent {
+		reverse_proxy vibe-ws-agent:3080
+	}
+
+	# ---------- Forgejo ----------
+	@forgejo host git.vibecotion.wraindrock.com
+	handle @forgejo {
+		reverse_proxy vibe-ws-forgejo:3000
+	}
+
+	# ---------- OpenCloud ----------
+	# OpenCloud 自身有 Traefik 组件期望 Host 匹配；网关转发时保留原始 Host，
+	# 由 OpenCloud 内部按其 OC_DOMAIN 处理。
+	@cloud host cloud.vibecotion.wraindrock.com
+	handle @cloud {
+		reverse_proxy vibe-ws-opencloud:9200 {
+			header_up Host {host}
+			header_up X-Forwarded-Proto https
+			header_up X-Forwarded-Host {host}
+		}
+	}
+
+	# ---------- Workbench 三环境 ----------
+	# 三个环境共享镜像层，但各自独立容器与数据卷（互不污染）。
+	@dev host dev.vibecotion.wraindrock.com
+	handle @dev {
+		reverse_proxy vibe-ws-workbench-dev:8080
+	}
+
+	@test host test.vibecotion.wraindrock.com
+	handle @test {
+		reverse_proxy vibe-ws-workbench-test:8080
+	}
+
+	@staging host staging.vibecotion.wraindrock.com
+	handle @staging {
+		reverse_proxy vibe-ws-workbench-staging:8080
+	}
+
+	# ---------- 兜底 ----------
+	# 通配符 *.wraindrock.com 会落到这里。不猜测意图，明确返回 404。
+	handle {
+		respond "Vibe Coding Workstation — no route for this host" 404
+	}
+}

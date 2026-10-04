@@ -1,0 +1,36 @@
+# Vibe Coding Workstation — Workbench (test)
+#
+# 测试环境，从干净基线起。
+#
+# 三环境（dev/test/staging）**共享同一镜像层**（省磁盘），
+# 但**数据卷与运行状态完全隔离**，互不污染。
+# 可通过 reset.sh 重置回「刚安装」状态。
+[Unit]
+Description=Vibe WS: Workbench test
+After=vibe-ws-network.service
+Requires=vibe-ws-network.service
+
+[Container]
+ContainerName=vibe-ws-workbench-test
+Image=docker.io/library/debian:13-slim
+Pod=vibe-ws.pod
+Network=vibe-ws.network
+
+Volume=vibe-ws-workbench-test.volume:/work:Z
+
+Environment=WORKBENCH_ENV=test
+Environment=WORKBENCH_PORT=8080
+
+ExposeHostPort=8080
+HealthCmd=test -d /work || exit 1
+HealthInterval=60s
+HealthTimeout=10s
+HealthRetries=3
+HealthStartPeriod=30s
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target

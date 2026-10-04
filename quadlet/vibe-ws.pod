@@ -1,0 +1,17 @@
+# Vibe Coding Workstation — Pod 定义
+#
+# 本 Pod 是工作站的边界：
+#   · 内部：5 个服务容器共享同一 network namespace，用内部端口互相访问
+#   · 外部：仅发布**一个**端口 9999（网关入口）
+#
+# 端口发布（PublishPort）写在 .pod 上而非各 .container 上 ——
+# 这样「对外只有一个端口」是 Pod 层面的结构性事实，而非靠约定维持。
+#
+# ⚠️ 9999 是宿主侧端口，与 OpenCloud 内部占用的 8000-9999 不冲突：
+#    内部端口在 Pod 的 network namespace 内，不落到宿主。
+[Pod]
+PodName=vibe-ws
+PublishPort=9999:9999
+
+[Install]
+WantedBy=default.target

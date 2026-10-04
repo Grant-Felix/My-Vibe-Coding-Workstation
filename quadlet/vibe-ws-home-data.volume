@@ -1,0 +1,7 @@
+# Home 门户 —— 无状态（配置驱动），保留卷以便运行时可写
+[Volume]
+VolumeName=vibe-ws-home-data
+Label=managed-by=vibe-ws
+
+[Install]
+WantedBy=default.target

@@ -1,0 +1,7 @@
+# Workbench dev 数据卷（reset.sh 会清空此卷内容以恢复初始状态）
+[Volume]
+VolumeName=vibe-ws-workbench-dev
+Label=managed-by=vibe-ws
+
+[Install]
+WantedBy=default.target

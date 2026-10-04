@@ -1,0 +1,7 @@
+# 网关 —— Caddy 运行时配置
+[Volume]
+VolumeName=vibe-ws-gateway-config
+Label=managed-by=vibe-ws
+
+[Install]
+WantedBy=default.target

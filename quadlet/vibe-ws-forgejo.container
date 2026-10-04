@@ -1,0 +1,38 @@
+# Vibe Coding Workstation — Forgejo（自托管 Git）
+[Unit]
+Description=Vibe WS: Forgejo
+After=vibe-ws-network.service
+Requires=vibe-ws-network.service
+
+[Container]
+ContainerName=vibe-ws-forgejo
+Image=docker.io/codeberg/forgejo:13
+Pod=vibe-ws.pod
+Network=vibe-ws.network
+
+Volume=vibe-ws-forgejo-data.volume:/data:Z
+
+# 对外访问的根 URL：经网关 + Cloudflare，必须与实际访问地址一致
+Environment=FORGEJO__server__ROOT_URL=https://git.vibecotion.wraindrock.com/
+Environment=FORGEJO__server__DOMAIN=git.vibecotion.wraindrock.com
+Environment=FORGEJO__server__SSH_DOMAIN=git.vibecotion.wraindrock.com
+Environment=FORGEJO__server__HTTP_PORT=3000
+# 反代终止 TLS：显式声明，否则 Forgejo 生成的绝对链接会用 http
+Environment=FORGEJO__server__PROTOCOL=http
+# 首次安装免交互
+Environment=FORGEJO__security__INSTALL_LOCK=true
+Environment=FORGEJO__service__DISABLE_REGISTRATION=true
+
+ExposeHostPort=3000
+HealthCmd=wget -q --spider http://127.0.0.1:3000/api/healthz || exit 1
+HealthInterval=30s
+HealthTimeout=5s
+HealthRetries=5
+HealthStartPeriod=60s
+
+[Service]
+Restart=always
+TimeoutStartSec=180
+
+[Install]
+WantedBy=default.target
