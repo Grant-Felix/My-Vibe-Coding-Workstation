@@ -79,6 +79,16 @@
     }).finally(function () { clearTimeout(timer); });
   }
 
+  /* 版本号：由 release.sh 生成的 version.json 提供（权威值在仓库根的 VERSION） */
+  function loadVersion() {
+    var el = document.getElementById('version');
+    if (!el) return;
+    fetch('version.json', { cache: 'no-store' })
+      .then(function (r) { return r.ok ? r.json() : null; })
+      .then(function (d) { el.textContent = (d && d.version) || '—'; })
+      .catch(function () { el.textContent = '—'; });
+  }
+
   function tick() {
     var el = document.getElementById('clock');
     if (!el) return;
@@ -93,6 +103,7 @@
 
     tick();
     setInterval(tick, 1000);
+    loadVersion();
 
     loadServices().then(function (services) {
       if (!services.length) {

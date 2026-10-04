@@ -19,6 +19,8 @@ apiVersion: vibecotion/v1
 # ── 运行环境要求（借鉴 DSH 的 peer 版本校验）─────────────────────────
 # 宁可在渲染前明确报错，也不要到运行时才诡异失败。
 # 由 render.sh 校验；不满足时给出可执行的修复建议。
+version: V.26.10.4-1
+
 requires:
   podman: ">=5.0"        # Quadlet 的 .pod / .network 支持
   systemd: ">=252"       # Quadlet 用户级生成器
