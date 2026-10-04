@@ -1,0 +1,26 @@
+# 个人覆盖层示例 —— 复制为 workstation.local.yaml 后生效
+#
+# 借鉴 DSH 的 patch 机制：本层在 workstation.yaml **之后**应用，
+# 按 id 定位目标，只覆盖你写了的字段。原文件保持不变，因此可以随时回退。
+#
+# workstation.local.yaml 已被 .gitignore 忽略：
+# 个人差异不会污染仓库，仓库里的基线也不会覆盖你的个人设置。
+
+apiVersion: vibecotion/v1
+
+# 覆盖任意顶层字段
+# domain: my.example.com
+# pod:
+#   publishPort: 18080
+
+# 覆盖某个服务（按 id 定位 —— 即使服务顺序变了也不会打歪）
+# services:
+#   forgejo:
+#     port: 3001
+#
+#   opencloud:
+#     image: docker.io/opencloudeu/opencloud-rolling:8.0.2
+
+# 停用某个服务（借鉴 DSH 的 plugins.<id>.disabled）
+# disabled:
+#   - workbench

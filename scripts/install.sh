@@ -14,11 +14,22 @@ set -Eeuo pipefail
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 
-# ---- 常量 ----
-# 改名只需改 workstation.yaml 的 prefix，然后跑 render.sh。
-# 这里只保留脚本自身需要的最小集合。
-PREFIX="vibecotion"
-CFG_DIR="${HOME}/.config/vibecotion"
+# ---- 从声明读取（唯一真源）----
+# 不在脚本里硬编码 prefix / 路径：那会让声明不再是真源。
+# 用与 render.sh 同一套分层解析库（已剥离行内注释与引号）。
+# shellcheck source=lib/decl.sh
+. "$SCRIPT_DIR/lib/decl.sh"
+
+_decl_files=()
+decl_add_layer "$REPO_DIR/workstation.yaml"
+decl_add_layer "$REPO_DIR/workstation.local.yaml"
+
+PREFIX="$(decl_get prefix)"
+DERIVED_ROOT="$(decl_get paths.derivedRoot)"; DERIVED_ROOT="${DERIVED_ROOT/#\~/$HOME}"
+CFG_DIR="$DERIVED_ROOT"
+
+[ -n "$PREFIX" ] || { printf '声明缺少 prefix（workstation.yaml）\n' >&2; exit 1; }
+[ -n "$DERIVED_ROOT" ] || { printf '声明缺少 paths.derivedRoot\n' >&2; exit 1; }
 
 # ---- 输出 ----
 if [ -t 1 ]; then

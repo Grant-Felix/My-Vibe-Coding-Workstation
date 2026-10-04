@@ -387,7 +387,76 @@ uninstall.sh --nuke        # 以上 + 清理 podman 残留 (system prune)
 
 ---
 
-## 9. 域名与对外暴露：`vibecotion.wraindrock.com`
+## 9. 借鉴 DeepSeek Harness 的设计理念
+
+DSH 是本项目的 Agent 组件（`@deepseek-ai/dsh`）。其设计理念有明确的**可迁移性**，
+以下为实际采纳的部分，每条都对应代码中的落地位置。
+
+### 9.1 分层组合（最重要的借鉴）
+
+DSH 的配置树**从空根开始**，依次叠加，后者覆盖前者：
+
+```
+DSH:     空根 → dsh.profile.bundles → profile cordis.patch.yml → $DSH_HOME patch → --patch
+本项目:  空根 → workstation.yaml  → workstation.local.yaml  → --patch <file>
+```
+
+**带来的性质**：
+- 基线可提交，个人差异放 `local` 层（gitignored）→ 两者互不污染
+- 覆盖**按 id 定位**（`services.<id>.<字段>`），不依赖位置
+
+**落地**：`scripts/lib/decl.sh`（组合引擎）、`--patch` 选项、
+`workstation.local.yaml.example`（覆盖层示例）。
+
+### 9.2 检查而不执行
+
+DSH 用 `--dump-config` / `--dump-config-schema` 在不启动的情况下检查组合结果。
+本项目对应：
+
+| 命令 | 对应 DSH | 作用 |
+|---|---|---|
+| `render.sh --dump` | `--dump-config` | 打印组合后的最终声明，**不写任何文件** |
+| `render.sh --check` | — | 校验产物与声明一致；不一致则退出码 1 |
+| `render.sh --dry-run` | — | 打印将要做的改动 |
+
+**设计意图**：能在造成副作用之前看清结果。本项目最核心的验收项是「卸得干净」，
+所以「不执行就能检查」的价值尤其高。
+
+### 9.3 显式校验 + 豁免通道
+
+DSH 在安装与启动时检查 peer 版本，不兼容时**要求用户明确确认豁免**
+（`version-exemptions`），而不是静默降级或诡异失败。
+
+**落地**：
+- `workstation.yaml` 的 `requires:` 声明最低 podman/systemd 版本
+- `render.sh` 渲染前校验，不满足则明确报错并给出修复建议
+- `WORKSTATION_SKIP_ENV_CHECK=1` 为显式豁免通道
+- **取不到版本时警告而非静默通过**（重要：静默通过等于没有检查）
+
+### 9.4 声明与实现的一致性强制
+
+DSH 的 profile manifest 声明 bundles，启动器据此装配 —— 声明与实现不可能脱节。
+
+**本项目的问题与修正**：实测发现 `render.sh` 原本只读取 6 个标量字段，
+`services.*` **根本没被读取** —— 声明对服务而言只是文档，服务实际由 `quadlet/` 的现成文件定义。
+
+**修正**：`verify_declaration()` 在渲染前双向校验：
+- 声明了但 `quadlet/` 没有 → 报错
+- `quadlet/` 有但声明没有 → 报错
+
+**实测两个方向都能拦截**（退出码 1），声明因此成为**被强制的真源**，而非装饰。
+
+### 9.5 未采纳的部分（及理由）
+
+| DSH 的做法 | 未采纳原因 |
+|---|---|
+| 完全声明驱动（单元文件由声明生成） | 需把健康检查/环境变量/卷等复杂字段全部塞进声明，风险高、收益有限。当前用 9.4 的一致性校验达成等效约束。 |
+| `--dump-config-schema`（JSON Schema） | 当前声明结构简单，收益不足以支撑实现成本。 |
+| 热重载（HMR） | 容器编排名单变更不频繁，渲染 + 重载即可。 |
+
+---
+
+## 10. 域名与对外暴露：`vibecotion.wraindrock.com`
 
 ### 实测结果
 
@@ -532,7 +601,7 @@ Cloudflare Tunnel 的 `localhost` 指 **cloudflared 容器自身**，非宿主�
 
 ---
 
-## 10. 当前进度
+## 11. 当前进度
 
 - [x] 本地 git 仓库初始化
 - [x] GitHub 远程仓库创建并推送

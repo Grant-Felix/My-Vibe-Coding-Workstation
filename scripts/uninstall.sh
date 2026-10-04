@@ -47,12 +47,23 @@ step() { printf '\n%s▸ %s%s\n' "$C_B" "$*" "$C_R"; }
 run()  { if [ "$DRY_RUN" = 1 ]; then printf '  %s[dry-run]%s %s\n' "$C_DIM" "$C_R" "$*"; else "$@"; fi; }
 
 # ── 从声明读取（唯一真源）─────────────────────────────────────────
-get() { sed -n "s/^\\s*${1}:\\s*\\(.*\\)\s*$/\\1/p" "$DECL" | head -1; }
+# 用与 render.sh 相同的分层解析库：它正确剥离行内注释与引号。
+# ⚠️ 不要退回 `sed -n "s/^\\s*key:...//"` —— 那会把行内注释一起吃进值里
+#    （例如 "…/systemd    # 产物：Quadlet 单元"），导致产物路径完全错误、
+#    卸载静默地什么也删不掉。此坑已踩过一次。
+# shellcheck source=lib/decl.sh
+. "$SCRIPT_DIR/lib/decl.sh"
+
+_decl_files=()
+decl_add_layer "$DECL"
+decl_add_layer "$REPO_DIR/workstation.local.yaml"
+
+get() { decl_get "$1"; }
 
 PREFIX=$(get prefix)
-UNIT_ROOT=$(sed -n 's/^\s*unitRoot:\s*\(.*\)\s*$/\1/p' "$DECL" | head -1); UNIT_ROOT="${UNIT_ROOT/#\~/$HOME}"
-DERIVED_ROOT=$(sed -n 's/^\s*derivedRoot:\s*\(.*\)\s*$/\1/p' "$DECL" | head -1); DERIVED_ROOT="${DERIVED_ROOT/#\~/$HOME}"
-PUBLISH_PORT=$(sed -n 's/^\s*publishPort:\s*\(.*\)\s*$/\1/p' "$DECL" | head -1)
+UNIT_ROOT=$(get paths.unitRoot);     UNIT_ROOT="${UNIT_ROOT/#\~/$HOME}"
+DERIVED_ROOT=$(get paths.derivedRoot); DERIVED_ROOT="${DERIVED_ROOT/#\~/$HOME}"
+PUBLISH_PORT=$(get pod.publishPort)
 
 [ -n "$PREFIX" ] || { printf '声明缺少 prefix\n' >&2; exit 1; }
 [ -n "$UNIT_ROOT" ] || { printf '声明缺少 paths.unitRoot\n' >&2; exit 1; }
