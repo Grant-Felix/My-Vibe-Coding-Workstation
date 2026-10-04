@@ -145,10 +145,15 @@ build_images() {
 
   # 基础发行版版本来自声明（决策 D17）。传入构建参数，
   # 使「改 workstation.yaml 的 base.version」能真正影响镜像。
-  local fedora_ver
-  fedora_ver="$(decl_get base.version)"; fedora_ver="${fedora_ver//\"/}"
+  local fedora_ver node_ver fnm_ver
+  fedora_ver="$(decl_get base.version)";    fedora_ver="${fedora_ver//\"/}"
+  node_ver="$(decl_get base.node.version)"; node_ver="${node_ver//\"/}"
+  fnm_ver="$(decl_get base.node.fnmVersion)"; fnm_ver="${fnm_ver//\"/}"
   [ -n "$fedora_ver" ] || fedora_ver=44
+  [ -n "$node_ver" ]   || node_ver=lts
+  [ -n "$fnm_ver" ]    || fnm_ver=1.39.0
   say "  基础发行版：Fedora $fedora_ver"
+  say "  Node 工具链：fnm $fnm_ver + Node $node_ver（npm/pnpm/yarn）"
 
   local d tag rc=0
   for d in "${dirs[@]}"; do
@@ -156,14 +161,16 @@ build_images() {
 
     # 镜像已存在且发行版一致才跳过；版本变了必须重建
     if podman image exists "$tag" 2>/dev/null; then
-      local have
-      have="$(podman image inspect "$tag" --format '{{ index .Labels "org.vibecotion.fedora" }}' 2>/dev/null || true)"
-      if [ "$have" = "$fedora_ver" ]; then
-        ok "镜像 $tag 已存在（Fedora $fedora_ver，跳过构建）"
+      local have_f have_n
+      have_f="$(podman image inspect "$tag" --format '{{ index .Labels "org.vibecotion.fedora" }}' 2>/dev/null || true)"
+      have_n="$(podman image inspect "$tag" --format '{{ index .Labels "org.vibecotion.node" }}' 2>/dev/null || true)"
+      if [ "$have_f" = "$fedora_ver" ] && [ "$have_n" = "$node_ver" ]; then
+        ok "镜像 $tag 已存在（Fedora $fedora_ver / Node $node_ver，跳过构建）"
         say "  $C_DIM如需强制重建：podman rmi $tag 后重新运行本脚本$C_R"
         continue
       fi
-      say "  $C_DIM$tag 基础版本为 \"${have:-未知}\"，与声明（$fedora_ver）不符，重建$C_R"
+      say "  $C_DIM$tag 当前为 Fedora \"${have_f:-未知}\" / Node \"${have_n:-未知}\"，"
+      say "  与声明（Fedora $fedora_ver / Node $node_ver）不符，重建$C_R"
     fi
 
     if [ ! -f "$REPO_DIR/$d/Dockerfile" ]; then
@@ -172,15 +179,19 @@ build_images() {
       continue
     fi
 
-    say "  构建 $tag（Fedora $fedora_ver，首次较慢）"
+    say "  构建 $tag（Fedora $fedora_ver，Node $node_ver，首次较慢）"
     if podman build \
          --build-arg "FEDORA_VERSION=$fedora_ver" \
+         --build-arg "NODE_VERSION=$node_ver" \
+         --build-arg "FNM_VERSION=$fnm_ver" \
          --label "org.vibecotion.fedora=$fedora_ver" \
+         --label "org.vibecotion.node=$node_ver" \
          -t "$tag" -f "$REPO_DIR/$d/Dockerfile" "$REPO_DIR/$d" >/dev/null 2>&1; then
       ok "已构建 $tag"
     else
       warn "构建失败。手动查看："
-      say "    podman build --build-arg FEDORA_VERSION=$fedora_ver -t $tag -f $REPO_DIR/$d/Dockerfile $REPO_DIR/$d"
+      say "    podman build --build-arg FEDORA_VERSION=$fedora_ver --build-arg NODE_VERSION=$node_ver \\"
+      say "      -t $tag -f $REPO_DIR/$d/Dockerfile $REPO_DIR/$d"
       rc=1
     fi
   done

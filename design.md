@@ -314,6 +314,7 @@ uninstall.sh --nuke        # 以上 + 清理 podman 残留 (system prune)
 | D15 | 与 Wraindrock 关系 | **独立项目**，定位为「全新的 Wraindrock」，只覆盖其中一个子集需求 |
 | D16 | 入口模式 | 保留 **Pod 端口映射 9999**（不采用 Wraindrock D5 的 Network=host + 127.0.0.1:8080） |
 | D17 | 基础发行版 | 自建镜像统一用 **Fedora**（当前 44，与宿主同源）；可升级，但需显式执行且**仅限稳定版** |
+| D18 | Node 工具链 | **fnm + Node LTS 最新版**（不用发行版 nodejs）；npm/pnpm/yarn 随之提供 |
 
 ### 待确认（阻塞项）
 
@@ -602,7 +603,7 @@ Cloudflare Tunnel 的 `localhost` 指 **cloudflared 容器自身**，非宿主�
 
 ---
 
-## 11. 基础发行版与升级（决策 D17）
+## 11. 基础发行版与 Node 工具链（决策 D17 / D18）
 
 ### 要求
 
@@ -674,6 +675,64 @@ Agent 镜像因此可以直接基于 Fedora，无需为 Node 换发行版。
 ```
 
 这避免了「改了声明但镜像还是旧的」这种静默不一致。
+
+---
+
+
+### Node 工具链：fnm + Node LTS（决策 D18）
+
+> node / npm / pnpm / yarn 一律由 **fnm** 管理，使用 **Node LTS 最新版**。
+
+**为何不用发行版打包的 nodejs**：
+- 发行版版本受其发布节流（Fedora 44 提供 nodejs20/22/24，更新节奏由发行版决定）
+- 与宿主不一致：宿主用 fnm（当前 v24.21.0），容器若用 dnf 装的 node 版本可能不同
+- 换 LTS 线只需改一个构建参数，不必等发行版跟进
+
+**已核实的事实**：
+
+| 项 | 实测值 |
+|---|---|
+| Node 当前最新 LTS | **v24.21.0（Krypton）** |
+| fnm 最新版 | **v1.39.0** |
+| Fedora 44 是否含 fnm | ❌ **不含**（仓库只有 nodejs20/22/24）→ 用官方发行包安装 |
+| Node 24 是否自带 corepack/pnpm/yarn | ✅ **自带**（corepack 0.36.0、pnpm 12.8.1、yarn 1.22.22） |
+
+**踩到的坑（已修正）**：
+
+> ⚠️ `lts-latest` **不是 fnm 的合法参数**。
+> fnm 接受 `--lts` 标志或 `lts/NAME` 格式；写 `lts-latest` 会**直接构建失败**。
+> 实测自 `fnm install --help`。
+
+**Dockerfile 里的正确写法**：
+
+```dockerfile
+ARG NODE_VERSION=lts
+RUN set -eux; \
+    eval "$(fnm env --shell bash)"; \
+    if [ "${NODE_VERSION}" = "lts" ]; then fnm install --lts; \
+    else fnm install "${NODE_VERSION}"; fi; \
+    RESOLVED="$(fnm ls | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' | head -1)"; \
+    fnm default "$RESOLVED"; fnm use "$RESOLVED"; \
+    node --version; npm --version; pnpm --version; yarn --version
+```
+
+需要完全可复现时传具体版本：`--build-arg NODE_VERSION=24.21.0`。
+
+**关于 corepack**：不需要 `corepack prepare pnpm@latest` ——
+Node 24 的安装目录**已直接提供** pnpm 与 yarn。
+另行 prepare 会引入多余的构建期网络依赖与失败点，故只用 `corepack enable` 确保 shim 可用。
+
+**声明与构建的绑定**：
+
+```yaml
+base:
+  node:
+    manager: fnm
+    version: lts          # 或具体版本号
+    fnmVersion: "1.39.0"
+```
+
+改动这些值后重跑 `install.sh`：镜像标签 `org.vibecotion.node` 与声明不符时会自动重建。
 
 ---
 

@@ -22,17 +22,26 @@ apiVersion: vibecotion/v1
 #
 # 升级策略：有新版本可用时**可升级**，但需显式操作，不静默漂移。
 # 详见 design.md §12。
+version: V.26.10.4-1
+
 base:
   distro: fedora
   version: "44"          # 当前基线
-  # 允许升级到的最高稳定版本；留空表示不设上限（此时由 release.sh/升级脚本判断稳定版）
+  # 允许升级到的最高稳定版本；留空表示不设上限（由 upgrade.sh 判断稳定版）
   maxVersion: ""
+  # Node 工具链（决策 D18）：fnm 管理，使用 Node LTS 最新版。
+  # npm 随 Node；pnpm/yarn 由 corepack 管理。
+  # "lts" = 构建时取当时最新 LTS（当前为 v24.x Krypton）。
+  # ⚠️ 不能写 "lts-latest" —— fnm 不接受该参数，会构建失败（实测）。
+  # 需要完全可复现时改成具体版本号，如 "24.21.0"。
+  node:
+    manager: fnm
+    version: lts
+    fnmVersion: "1.39.0"
 
 # ── 运行环境要求（借鉴 DSH 的 peer 版本校验）─────────────────────────
 # 宁可在渲染前明确报错，也不要到运行时才诡异失败。
 # 由 render.sh 校验；不满足时给出可执行的修复建议。
-version: V.26.10.4-1
-
 requires:
   podman: ">=5.0"        # Quadlet 的 .pod / .network 支持
   systemd: ">=252"       # Quadlet 用户级生成器
