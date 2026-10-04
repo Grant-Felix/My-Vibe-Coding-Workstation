@@ -7,20 +7,18 @@
 #   1. 校验前置条件（不安装任何宿主包）
 #   2. 同步配置到 ~/.config/vibecotion（宿主的合法写入面之一）
 #   3. 安装 Quadlet 单元并启动
-#   4. 把本次创建的资源登记进 manifest（供 uninstall.sh 精确回收）
+#   4. 渲染产物（声明 → 产物）。没有账本：卸载靠前缀归属，不靠记账。
 #
 set -Eeuo pipefail
 
 SCRIPT_DIR=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 REPO_DIR=$(cd "$SCRIPT_DIR/.." && pwd)
 
-# ---- 常量：改名只需改这里 ----
+# ---- 常量 ----
+# 改名只需改 workstation.yaml 的 prefix，然后跑 render.sh。
+# 这里只保留脚本自身需要的最小集合。
 PREFIX="vibecotion"
 CFG_DIR="${HOME}/.config/vibecotion"
-QUADLET_DIR="${HOME}/.config/containers/systemd"
-STATE_DIR="${HOME}/.local/state/vibecotion"
-MANIFEST="${STATE_DIR}/manifest.json"
-LOG_DIR="${STATE_DIR}/logs"
 
 # ---- 输出 ----
 if [ -t 1 ]; then
@@ -107,20 +105,22 @@ prepare_secrets() {
   fi
 }
 
-# ---- 同步配置到宿主合法写入面 ----
-sync_config() {
-  step "同步配置"
+# ---- 渲染产物（声明 → 产物）----
+# 决策（继承 Wraindrock D2）：没有 manifest.json。状态即 workstation.yaml，
+# 产物由 render.sh 生成并自动清理陈旧项。本脚本不记账。
+render_artifacts() {
+  step "渲染产物"
 
-  mkdir -p "$CFG_DIR"
+  [ -x "$SCRIPT_DIR/render.sh" ] || die "缺少 render.sh"
+  "$SCRIPT_DIR/render.sh" || die "渲染失败"
 
-  # 网关配置 + 门户静态文件（单一来源：仓库 config/）
-  install -m 0644 "$REPO_DIR/config/gateway/Caddyfile" "$CFG_DIR/Caddyfile"
-  ok "Caddyfile"
-
-  rm -rf "$CFG_DIR/home"
-  mkdir -p "$CFG_DIR/home"
-  install -m 0644 "$REPO_DIR"/config/home/* "$CFG_DIR/home/"
-  ok "门户静态文件（$(ls -1 "$REPO_DIR"/config/home | wc -l) 个）"
+  # daemon-reload 是便利而非正确性前提：产物已落盘，systemd 会在下次
+  # 需要时自行察觉。无用户总线（如非交互会话）时不因此中断。
+  if systemctl --user daemon-reload 2>/dev/null; then
+    ok "systemd 已重载"
+  else
+    warn "systemd 重载失败（无用户会话总线？）。产物已就位，登录后可手动重载"
+  fi
 }
 
 # ---- 构建 agent 镜像 ----
@@ -191,26 +191,7 @@ seed_dsh_home() {
   fi
 }
 
-# ---- 安装 Quadlet 单元 ----
-install_units() {
-  step "安装 Quadlet 单元"
 
-  mkdir -p "$QUADLET_DIR"
-
-  # 先移除本项目的旧单元（按前缀），避免改名后残留
-  find "$QUADLET_DIR" -maxdepth 1 -name "${PREFIX}*" -type f -delete 2>/dev/null || true
-
-  local n=0
-  for f in "$REPO_DIR"/quadlet/*; do
-    [ -f "$f" ] || continue
-    install -m 0644 "$f" "$QUADLET_DIR/$(basename "$f")"
-    n=$((n + 1))
-  done
-  ok "已安装 ${n} 个单元到 $QUADLET_DIR"
-
-  systemctl --user daemon-reload
-  ok "systemd 已重载"
-}
 
 # ---- 启动 ----
 start_services() {
@@ -258,56 +239,6 @@ wait_ready() {
   return 1
 }
 
-# ---- 写 manifest ----
-write_manifest() {
-  step "登记资源清单"
-
-  mkdir -p "$STATE_DIR" "$LOG_DIR"
-
-  local units_json="" vols_json="" nets_json=""
-
-  # 枚举本项目的 Quadlet 单元（部署后落到宿主的那份）
-  while IFS= read -r f; do
-    [ -n "$f" ] || continue
-    units_json="${units_json}"$(basename "$f")","
-  done < <(find "$QUADLET_DIR" -maxdepth 1 -name "${PREFIX}*" -type f 2>/dev/null | sort)
-  units_json="[${units_json%,}]"
-
-  # 卷与网络：从单元文件名推导，卸载时逐个核对
-  vols_json=$(printf '%s' "$(cd "$REPO_DIR/quadlet" && ls *.volume 2>/dev/null | sed 's/\.volume$//' | sed 's/^/"/; s/$/",/' | tr -d '\n')")
-  vols_json="[${vols_json%,}]"
-
-  nets_json=$(printf '%s' "$(cd "$REPO_DIR/quadlet" && ls *.network 2>/dev/null | sed 's/\.network$//' | sed 's/^/"/; s/$/",/' | tr -d '\n')")
-  nets_json="[${nets_json%,}]"
-
-  cat > "$MANIFEST" <<JSON
-{
-  "name": "vibe-coding-workstation",
-  "prefix": "${PREFIX}",
-  "installed_at": "$(date -Iseconds)",
-  "repo_dir": "${REPO_DIR}",
-  "host_write_paths": [
-    "${QUADLET_DIR}",
-    "${CFG_DIR}",
-    "${STATE_DIR}"
-  ],
-  "units": ${units_json},
-  "volumes": ${vols_json},
-  "networks": ${nets_json},
-  "pod": "${PREFIX}",
-  "published_port": 9999,
-  "secrets": [
-    "${HOME}/.config/vibecotion/cloudflared.env",
-    "${HOME}/.config/vibecotion/opencloud.env"
-  ]
-}
-JSON
-
-  chmod 600 "$MANIFEST"
-  ok "清单已写入 $MANIFEST"
-  say "  $C_DIM卸载时据此精确回收，不使用 podman system prune$C_R"
-}
-
 # ---- 主流程 ----
 main() {
   printf '\n%sVibe Coding Workstation%s — 部署\n' "$C_B" "$C_R"
@@ -315,21 +246,18 @@ main() {
 
   preflight
   prepare_secrets
-  sync_config
+  render_artifacts
   build_images
-  install_units
   start_services
   seed_dsh_home
 
   if wait_ready; then
-    write_manifest
     printf '\n%s部署完成%s\n' "$C_OK$C_B" "$C_R"
     say "  本机访问：http://127.0.0.1:9999"
     say "  公网访问：https://vibecotion.wraindrock.com"
     say "  $C_DIM卸载：$SCRIPT_DIR/uninstall.sh --dry-run  # 先预览$C_R"
   else
-    write_manifest
-    printf '\n%s部署未完全成功%s（清单已记录，便于清理）\n' "$C_WARN" "$C_R"
+    printf '\n%s部署未完全成功%s（无账本：直接跑 render.sh 或 uninstall.sh 即可）\n' "$C_WARN" "$C_R"
     exit 1
   fi
 }

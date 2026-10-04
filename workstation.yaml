@@ -1,0 +1,75 @@
+# Vibe Coding Workstation —— 唯一真源
+#
+# 本文件是全部部署状态的声明。产物（Quadlet 单元 / 网关配置 / 门户静态文件）
+# 都是**派生物**，由 scripts/render.sh 从本文件 + 各服务的源文件生成，
+# 绝不手工编辑，也绝不入库。
+#
+# 卸载 = 删除产物（无账本）。归属由统一前缀 vibecotion- 标识。
+#
+# 改名只需改下面的 prefix，然后跑一次 render。
+
+apiVersion: vibecotion/v1
+
+# ── 归属标识 ────────────────────────────────────────────────────────
+# 这是声明式卸载的全部依据：凡带此前缀的产物即本项目所有，其余一律不碰。
+prefix: vibecotion
+
+# ── 命名 ────────────────────────────────────────────────────────────
+name: Vibe Coding Workstation
+domain: vibecotion.wraindrock.com
+
+# ── 路径 ────────────────────────────────────────────────────────────
+paths:
+  # 产物：可随时重建、可随时删除
+  unitRoot: ~/.config/containers/systemd
+  derivedRoot: ~/.config/vibecotion
+
+# ── Pod 与入口 ──────────────────────────────────────────────────────
+# 决策 D8/D16：对外只有这一个端口，其余都是 Pod 内部端口。
+# 9999 > 1024，rootless 可直接绑定，无需特权。
+pod:
+  name: vibecotion
+  # 对外唯一端口映射。空串表示不暴露（Wraindrock D5 模式）。
+  publishPort: 9999
+
+# ── 服务 ────────────────────────────────────────────────────────────
+# port 一律是 **Pod 内部端口**，不落宿主。
+services:
+  gateway:
+    image: docker.io/library/caddy:2.10-alpine
+    port: 9999
+    kind: gateway          # 承担 Host 路由
+    config: config/gateway/Caddyfile
+    static: config/home     # 门户静态文件挂载到 /srv
+
+  agent:
+    image: localhost/vibecotion-agent:latest
+    port: 3080
+    build: agent            # 由 install.sh 构建
+    volumes:
+      - vibecotion-agent-dsh:/home/agent/.dsh
+      - vibecotion-agent-data:/home/agent/workspace
+    secret: true            # 含 API 凭证的卷，卸载默认保留
+
+  forgejo:
+    image: docker.io/codeberg/forgejo:13
+    port: 3000
+    host: git.${domain}
+    volumes:
+      - vibecotion-forgejo-data:/data
+
+  opencloud:
+    image: docker.io/opencloudeu/opencloud-rolling:8.0.1
+    port: 9200
+    host: cloud.${domain}
+    volumes:
+      - vibecotion-opencloud-config:/etc/opencloud
+      - vibecotion-opencloud-data:/var/lib/opencloud
+
+  workbench:
+    image: docker.io/library/debian:13-slim
+    port: 8080
+    # 三环境共享镜像层，数据卷与运行状态完全隔离
+    instances: [dev, test, staging]
+    volumes:
+      - vibecotion-workbench-{env}:/work
