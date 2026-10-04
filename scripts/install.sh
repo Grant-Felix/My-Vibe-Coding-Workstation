@@ -180,18 +180,25 @@ build_images() {
     fi
 
     say "  构建 $tag（Fedora $fedora_ver，Node $node_ver，首次较慢）"
+
+    # 构建日志写入文件：失败时打印尾部，成功时静默。
+    # 不能丢弃 —— 构建失败时的真实原因只存在于这份日志里。
+    local buildlog="$REPO_DIR/.build-$d.log"
     if podman build \
          --build-arg "FEDORA_VERSION=$fedora_ver" \
          --build-arg "NODE_VERSION=$node_ver" \
          --build-arg "FNM_VERSION=$fnm_ver" \
          --label "org.vibecotion.fedora=$fedora_ver" \
          --label "org.vibecotion.node=$node_ver" \
-         -t "$tag" -f "$REPO_DIR/$d/Dockerfile" "$REPO_DIR/$d" >/dev/null 2>&1; then
+         -t "$tag" -f "$REPO_DIR/$d/Dockerfile" "$REPO_DIR/$d" >"$buildlog" 2>&1; then
       ok "已构建 $tag"
+      rm -f "$buildlog"
     else
-      warn "构建失败。手动查看："
-      say "    podman build --build-arg FEDORA_VERSION=$fedora_ver --build-arg NODE_VERSION=$node_ver \\"
-      say "      -t $tag -f $REPO_DIR/$d/Dockerfile $REPO_DIR/$d"
+      warn "构建失败。日志（末 30 行）："
+      say "  $C_DIM──────────────────────────────────────────────$C_R"
+      tail -30 "$buildlog" | sed "s/^/    /"
+      say "  $C_DIM──────────────────────────────────────────────$C_R"
+      say "  完整日志：$buildlog"
       rc=1
     fi
   done
