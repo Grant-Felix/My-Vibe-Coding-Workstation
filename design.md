@@ -313,6 +313,7 @@ uninstall.sh --nuke        # 以上 + 清理 podman 残留 (system prune)
 | D14 | Agent 接入 | **DSH 在容器内独立安装**，不挂载宿主安装（维持隔离与可卸载性） |
 | D15 | 与 Wraindrock 关系 | **独立项目**，定位为「全新的 Wraindrock」，只覆盖其中一个子集需求 |
 | D16 | 入口模式 | 保留 **Pod 端口映射 9999**（不采用 Wraindrock D5 的 Network=host + 127.0.0.1:8080） |
+| D17 | 基础发行版 | 自建镜像统一用 **Fedora**（当前 44，与宿主同源）；可升级，但需显式执行且**仅限稳定版** |
 
 ### 待确认（阻塞项）
 
@@ -601,7 +602,82 @@ Cloudflare Tunnel 的 `localhost` 指 **cloudflared 容器自身**，非宿主�
 
 ---
 
-## 11. 当前进度
+## 11. 基础发行版与升级（决策 D17）
+
+### 要求
+
+> 本项目使用到的容器全部使用 **Fedora 44**，并在有可用更新（如 Fedora 45 或更新）时可升级。
+
+### 现实约束：只有自建镜像能改
+
+全部容器分两类，**只有一类能遵守此要求**：
+
+| 镜像 | 底子 | 能否用 Fedora |
+|---|---|---|
+| `cloudflare/cloudflared` | Cloudflare 官方 | ❌ 上游产物，无 Fedora 变体 |
+| `codeberg/forgejo` | 上游 | ❌ 上游产物 |
+| `caddy` | Alpine | ❌ 上游产物 |
+| `opencloudeu/opencloud-rolling` | 上游 | ❌ 上游产物 |
+| **`agent`** | node:24-**bookworm**（Debian） | ✅ **已改为 Fedora 44** |
+| **`workbench`** | **debian:13-slim** | ✅ **已改为 Fedora 44** |
+
+**上游镜像不应自行重建**：那会让我们承担跟进上游安全更新与版本迭代的责任，
+成本高且容易落后。它们自身会维护底层发行版的安全更新。
+
+> 因此 D17 的适用范围是：**本项目自建的两个镜像**。
+> 这一点已在 `workstation.yaml` 的 `base:` 中显式声明，未隐瞒。
+
+### 已核实的事实
+
+改为 Fedora **不牺牲任何功能**——已从 Fedora 官方仓库元数据核实：
+
+```
+Fedora 44 的 nodejs 包：
+  nodejs20 = 20.20.0
+  nodejs22 = 22.22.0
+  nodejs24 = 24.13.1      ← DSH 需要 Node 24，恰好满足
+```
+
+DSH 要求 Node 24，Fedora 44 官方仓库提供的正是 **24.13.1**。
+Agent 镜像因此可以直接基于 Fedora，无需为 Node 换发行版。
+
+### 升级策略
+
+| 项 | 决定 |
+|---|---|
+| 触发方式 | **显式执行** `scripts/upgrade.sh`，不静默漂移 |
+| 版本范围 | **仅稳定版**，绝不使用 Beta |
+| 判断依据 | 查询 `fedoraproject.org/releases.json`；Beta 位于 `releases/test/`，不在稳定列表内 |
+| 生效方式 | 改 `workstation.yaml` 的 `base.version` → 重跑 `install.sh` 重建镜像 |
+
+```bash
+./scripts/upgrade.sh --check      # 检查是否有新稳定版
+./scripts/upgrade.sh --to 45      # 升级（若 45 已转正）
+./scripts/upgrade.sh --latest     # 升到最新稳定版
+```
+
+**实测行为**：
+- 当前 Fedora 44 → `--check` 报告「已是最新稳定版」
+  （稳定版列表为 42/43/44；**45 仍在 Beta，被正确排除**）
+- 模拟旧版本（42）→ 正确提示「有更新的稳定版：Fedora 44」
+- `--to 45` → **拒绝**，退出码 1（45 非稳定版）
+- `--to 99` → 拒绝
+
+### 镜像与版本的绑定
+
+构建时把发行版版本写成镜像标签 `org.vibecotion.fedora`，
+`install.sh` 据此判断是否需要重建：
+
+```
+镜像标签版本 == 声明版本  → 跳过构建
+不一致                    → 自动重建
+```
+
+这避免了「改了声明但镜像还是旧的」这种静默不一致。
+
+---
+
+## 12. 当前进度
 
 - [x] 本地 git 仓库初始化
 - [x] GitHub 远程仓库创建并推送

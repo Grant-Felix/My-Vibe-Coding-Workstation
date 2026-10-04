@@ -143,14 +143,27 @@ build_images() {
   # 换成上游同名基础镜像会导致容器立即退出（崩溃循环）。
   local dirs=(agent workbench)
 
+  # 基础发行版版本来自声明（决策 D17）。传入构建参数，
+  # 使「改 workstation.yaml 的 base.version」能真正影响镜像。
+  local fedora_ver
+  fedora_ver="$(decl_get base.version)"; fedora_ver="${fedora_ver//\"/}"
+  [ -n "$fedora_ver" ] || fedora_ver=44
+  say "  基础发行版：Fedora $fedora_ver"
+
   local d tag rc=0
   for d in "${dirs[@]}"; do
     tag="localhost/${PREFIX}-${d}:latest"
 
+    # 镜像已存在且发行版一致才跳过；版本变了必须重建
     if podman image exists "$tag" 2>/dev/null; then
-      ok "镜像 $tag 已存在（跳过构建）"
-      say "  $C_DIM如需重建：podman rmi $tag 后重新运行本脚本$C_R"
-      continue
+      local have
+      have="$(podman image inspect "$tag" --format '{{ index .Labels "org.vibecotion.fedora" }}' 2>/dev/null || true)"
+      if [ "$have" = "$fedora_ver" ]; then
+        ok "镜像 $tag 已存在（Fedora $fedora_ver，跳过构建）"
+        say "  $C_DIM如需强制重建：podman rmi $tag 后重新运行本脚本$C_R"
+        continue
+      fi
+      say "  $C_DIM$tag 基础版本为 \"${have:-未知}\"，与声明（$fedora_ver）不符，重建$C_R"
     fi
 
     if [ ! -f "$REPO_DIR/$d/Dockerfile" ]; then
@@ -159,12 +172,15 @@ build_images() {
       continue
     fi
 
-    say "  构建 $tag（首次较慢）"
-    if podman build -t "$tag" -f "$REPO_DIR/$d/Dockerfile" "$REPO_DIR/$d" >/dev/null 2>&1; then
+    say "  构建 $tag（Fedora $fedora_ver，首次较慢）"
+    if podman build \
+         --build-arg "FEDORA_VERSION=$fedora_ver" \
+         --label "org.vibecotion.fedora=$fedora_ver" \
+         -t "$tag" -f "$REPO_DIR/$d/Dockerfile" "$REPO_DIR/$d" >/dev/null 2>&1; then
       ok "已构建 $tag"
     else
       warn "构建失败。手动查看："
-      say "    podman build -t $tag -f $REPO_DIR/$d/Dockerfile $REPO_DIR/$d"
+      say "    podman build --build-arg FEDORA_VERSION=$fedora_ver -t $tag -f $REPO_DIR/$d/Dockerfile $REPO_DIR/$d"
       rc=1
     fi
   done
