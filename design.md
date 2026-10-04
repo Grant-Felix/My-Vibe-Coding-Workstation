@@ -249,6 +249,9 @@ uninstall.sh --nuke        # 以上 + 清理 podman 残留 (system prune)
 | D8 | 端口段 | `99999` **无效**（超出 0-65535）。最终：**对外唯一端口 `9999`**，其余为 Pod 内部端口 |
 | D9 | 域名 | `vibecotion.wraindrock.com`（Cloudflare 托管，**已开启代理**） |
 | D10 | 入口形态 | `9999` 后为**独立网关容器**（非门户兼任），门户保持纯导航 |
+| D11 | 对外暴露方式 | **Cloudflare Tunnel**（`cloudflare/cloudflared` 容器，出站连接） |
+| D12 | 路由方式 | **按域名**（`Host(...)` 匹配），非路径路由 |
+| D13 | 隧道凭证 | token 存于**本地 gitignored 文件**，**绝不入库**（仓库为 Public） |
 
 ### 待确认（阻塞项）
 
@@ -360,10 +363,48 @@ Cloudflare 代理模式下：**TLS 在 Cloudflare 边缘终止**，浏览器到�
   - 或 DNS-only + 公网端口转发 → 需要公网可达 + 端口映射权限，
     且要处理家庭宽带的动态 IP（DDNS），**可卸载性更差**（路由器上留配置）。
 
-> **推荐 Cloudflare Tunnel**。它让「对外唯一端口」变成「对外零端口」：
+> **已采纳 Cloudflare Tunnel**。它让「对外唯一端口」变成「对外零端口」：
 > 流量走 cloudflared 出站隧道直达 Pod 网关，**宿主不需要开放任何入站端口**。
 > 这比映射 `9999` 到公网**更安全**，也更符合隔离目标。
 > 若你仍希望局域网内用 `9999` 直连，两者可**并存**（局域网直连 9999，公网走隧道）。
+
+### 隧道凭证的安全处理
+
+```
+实测 token 载荷：
+  account tag : b2a7bb7cc6bc198ddf8b60051c78226c
+  tunnel id   : be1ad0ec-090f-4a09-9bb9-17def19c0e24
+  secret      : 48 字符（不记录）
+```
+
+**存放位置**：`~/.config/vibe-workstation/cloudflared.env`（`chmod 600`），**不属于仓库**。
+
+**三条硬规则**：
+1. **绝不提交入库** —— 本仓库是 **Public**，token 等同于隧道凭证。
+2. 部署时由 `install.sh` **从该文件读取**并注入容器环境变量（`TUNNEL_TOKEN`），
+   **不硬编码进 Quadlet 单元**（Quadlet 单元要入库）。
+3. 卸载时**一并删除**该凭证文件（见第 6 节 manifest 清单）。
+
+> ⚠️ **建议你事后轮换此 token**：它已出现在对话记录中。
+> Cloudflare 面板 → Zero Trust → Networks → Tunnels → 该隧道 → 重新生成凭证即可。
+> 轮换后只需更新本地那个文件，无需改动任何入库代码。
+
+### 域名规划
+
+统一使用 `vibecotion.wraindrock.com` 的子域，全部指向同一隧道：
+
+| 主机名 | 目标 | 说明 |
+|---|---|---|
+| `vibecotion.wraindrock.com` | Home 门户 | 主入口 |
+| `agent.vibecotion.wraindrock.com` | Agent 容器 | Vibe 开发 |
+| `git.vibecotion.wraindrock.com` | Forgejo | 代码托管 |
+| `cloud.vibecotion.wraindrock.com` | OpenCloud | 存储（**必须独立域名**，其硬依赖 `Host` 匹配） |
+| `dev.vibecotion.wraindrock.com` | Workbench dev | |
+| `test.vibecotion.wraindrock.com` | Workbench test | |
+| `staging.vibecotion.wraindrock.com` | Workbench staging | |
+
+> 通配符证书 + 通配符隧道路由（`*.vibecotion.wraindrock.com`）可省去逐个配置，
+> 但需在 Cloudflare 面板为每条主机名配置 Tunnel 的 Public Hostname 映射。
 
 ---
 
