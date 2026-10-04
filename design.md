@@ -411,13 +411,21 @@ Cloudflare 代理模式下：**TLS 在 Cloudflare 边缘终止**，浏览器到�
 
 **隧道名**：`Wraindrock`，id `be1ad0ec-090f-4a09-9bb9-17def19c0e24`
 
-面板现有三条路由（截图实读）：
+面板三条路由（**已由用户修正后**，实读）：
 
 | 顺序 | 目标 | 服务 |
 |---|---|---|
-| 1 | `www.wraindrock.com` | `https://localhost:45677` |
-| 2 | `vvibecotion.wraindrock.com` | `https://localhost:45678` |
-| 3 | `*.wraindrock.com` | `https://localhost:45679` |
+| 1 | `www.wraindrock.com` | `https://localhost:9999` |
+| 2 | `vibecotion.wraindrock.com` | `https://localhost:9999` |
+| 3 | `*.wraindrock.com` | `https://localhost:9999` |
+
+**修正验证（DNS 实测）**：
+
+| 项 | 修正前 | 修正后 |
+|---|---|---|
+| P1 拼写 | `vvibecotion` 存在 / `vibecotion` NXDOMAIN | ✅ 反转：`vibecotion` `Status:0`；`vvibecotion` `Status:3` |
+| P3 端口 | 45677/45678/45679 三个独立端口 | ✅ 统一为 `9999` |
+| P2 目标主机名 | `localhost` | ⬜ **待改**，见下 |
 
 **发现三个问题：**
 
@@ -430,15 +438,27 @@ Cloudflare 代理模式下：**TLS 在 Cloudflare 边缘终止**，浏览器到�
 
 面板多输了一个 `v`。**两条路可选**：改面板为单 v，或改用双 v 作为正式域名。
 
-#### 🔴 P2：`localhost` 指向错误的目标
+#### 🟡 P2：`localhost` 取决于 cloudflared 的部署方式（待定）
 
-Cloudflare Tunnel 的 `localhost` 指的是 **cloudflared 容器自身**，不是宿主机。
-本架构为 **cloudflared → 网关容器**，因此目标必须是**网关容器在 Pod 网络中的地址**：
+Cloudflare Tunnel 的 `localhost` 指 **cloudflared 容器自身**，非宿主机。
 
-```
-❌ https://localhost:45678          # cloudflared 容器自己，无服务
-✅ http://gateway:9999             # Pod 内网关容器（同一 network namespace）
-```
+| cloudflared 部署方式 | 正确目标 |
+|---|---|
+| 在**同一 Pod** 内（**本项目采用**） | `http://gateway:9999`（Pod 内容器名） |
+| `--network host` | `http://localhost:9999` |
+
+本项目采用 **Pod 内**部署，故面板应填 `http://gateway:9999`。
+
+另：面板当前为 `https://`，而网关仅监听明文 HTTP（Pod 内部，外层已由 Cloudflare 加密），
+`https://` 会导致 **TLS 握手失败**，应改为 `http://`。
+
+**最终目标值**：`http://gateway:9999`
+
+#### 关于当前 `530`
+
+`vibecotion.wraindrock.com` 与 `www.wraindrock.com` 实测均返回 **HTTP 530**。
+这是**预期状态**：隧道路由已配置，但 **cloudflared 尚未上线**，Cloudflare 无可用连接。
+→ 该状态码是**部署后验证隧道是否打通的最直接信号**（530 → 200）。
 
 #### 🔴 P3：三个不同端口违背单端口架构
 
