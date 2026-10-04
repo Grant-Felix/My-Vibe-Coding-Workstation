@@ -198,13 +198,24 @@ remove_volumes() {
     return 0
   fi
 
+  # 含凭证的卷：默认保留，只有 --purge 才删。
+  # vibecotion-agent-dsh 里有 .credentials.yaml（API 密钥），
+  # 误删会让用户不得不重新配置所有 API key。
+  local protected="${PREFIX}-agent-dsh"
+
   local v
   for v in $vols; do
-    if podman volume exists "$v" 2>/dev/null; then
-      run podman volume rm -f "$v" && ok "已删除卷 $v"
-    else
+    if ! podman volume exists "$v" 2>/dev/null; then
       skip "卷 $v 不存在"
+      continue
     fi
+
+    if [ "$v" = "$protected" ] && [ "$PURGE" != 1 ]; then
+      warn "保留 $v（含 API 凭证）—— 如需删除加 --purge"
+      continue
+    fi
+
+    run podman volume rm -f "$v" && ok "已删除卷 $v"
   done
 }
 
@@ -328,8 +339,18 @@ verify_clean() {
   c=$(podman ps -a --format '{{.Names}}' 2>/dev/null | grep -cE "^${PREFIX}" || true)
   [ "$c" -gt 0 ] && { err "仍有 $c 个容器"; residues=$((residues+c)); }
 
-  v=$(podman volume ls --format '{{.Name}}' 2>/dev/null | grep -cE "^${PREFIX}" || true)
-  [ "$v" -gt 0 ] && { err "仍有 $v 个卷"; residues=$((residues+v)); }
+  # 计数时排除刻意保留的凭证卷（默认卸载路径下它是预期留存，不算残留）
+  v=$(podman volume ls --format '{{.Name}}' 2>/dev/null | grep -E "^${PREFIX}" \
+       | grep -vx "${PREFIX}-agent-dsh" | grep -c . || true)
+  if [ "$v" -gt 0 ]; then err "仍有 $v 个卷"; residues=$((residues+v)); fi
+
+  if podman volume exists "${PREFIX}-agent-dsh" 2>/dev/null; then
+    if [ "$PURGE" = 1 ]; then
+      err "凭证卷 ${PREFIX}-agent-dsh 仍存在"; residues=$((residues+1))
+    else
+      skip "${PREFIX}-agent-dsh 保留（含 API 凭证；--purge 可清除）"
+    fi
+  fi
 
   n=$(podman network ls --format '{{.Name}}' 2>/dev/null | grep -cE "^${PREFIX}" || true)
   [ "$n" -gt 0 ] && { err "仍有 $n 个网络"; residues=$((residues+n)); }

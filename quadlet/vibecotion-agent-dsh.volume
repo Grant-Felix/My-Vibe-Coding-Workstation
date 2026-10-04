@@ -1,0 +1,8 @@
+# Agent 的 DSH_HOME（profiles + .credentials.yaml）
+# ⚠️ 含 API 凭证 —— 普通卸载保留，需 --purge 才删除。
+[Volume]
+VolumeName=vibecotion-agent-dsh
+Label=managed-by=vibecotion
+
+[Install]
+WantedBy=default.target

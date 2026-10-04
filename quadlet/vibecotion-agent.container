@@ -1,40 +1,43 @@
 # Vibe Coding Workstation — Agent 容器
 #
-# 默认 agent：DeepSeek Harness（DSH）。
-# 设计为**可替换**：换掉 Image 即可切换 agent，其余（网络/卷/路由）不变。
+# 默认 agent：DeepSeek Harness（DSH），本地自建镜像（见 agent/Dockerfile）。
+# 设计为**可替换**：改 Image= 即可切换 agent。
 #
-# DSH 在**容器内独立安装**（决策 D14）——不挂载宿主安装，
-# 以维持隔离性，并避免卸载清单多出宿主侧外部依赖。
+# 决策 D14：DSH 在容器内独立安装，不挂载宿主 Node/DSH 安装。
 [Unit]
-Description=Vibe WS: Agent (DSH)
+Description=Vibe WS: Agent (DeepSeek Harness)
 After=vibecotion-network.service
 Requires=vibecotion-network.service
 
 [Container]
 ContainerName=vibecotion-agent
-# ⚠️ 占位镜像：DSH 的容器化镜像需在实施阶段确定。
-#    下面用带 Node 的基础镜像占位，安装步骤由 install.sh 注入。
-Image=docker.io/library/node:24-bookworm-slim
+# 本地构建标签。带 registry 前缀是为避免 podman 误向远端拉取同名镜像。
+# 由 install.sh 构建；镜像缺失时先跑 install.sh。
+Image=localhost/vibecotion-agent:latest
+
 Pod=vibecotion.pod
 
-Volume=vibecotion-agent-data.volume:/home/agent:Z
+# DSH_HOME（profiles + 凭证）与工作目录分开两个卷：
+# 前者需可备份/可迁移，后者是易失的工作产出。
+Volume=vibecotion-agent-dsh.volume:/home/agent/.dsh:Z
+Volume=vibecotion-agent-data.volume:/home/agent/workspace:Z
 
-# DSH Web 默认端口
-Environment=NODE_ENV=production
-Environment=DSH_PORT=3080
+Environment=DSH_HOME=/home/agent/.dsh
 Environment=HOME=/home/agent
+Environment=NODE_ENV=production
+Environment=DSH_WEB_PORT=3080
 
-# 内部端口，不对宿主发布（发布在 .pod 上的 9999）
-ExposeHostPort=3080
+# 健康检查用 127.0.0.1（容器自身回环）；Pod 内成员共享网络命名空间，
+# 探测自身端口即可反映服务是否存活。
 HealthCmd=wget -q --spider http://127.0.0.1:3080/ || exit 1
 HealthInterval=30s
 HealthTimeout=5s
 HealthRetries=5
-HealthStartPeriod=60s
+HealthStartPeriod=90s
 
 [Service]
 Restart=always
-TimeoutStartSec=180
+TimeoutStartSec=300
 
 [Install]
 WantedBy=default.target

@@ -123,6 +123,74 @@ sync_config() {
   ok "门户静态文件（$(ls -1 "$REPO_DIR"/config/home | wc -l) 个）"
 }
 
+# ---- 构建 agent 镜像 ----
+build_images() {
+  step "构建镜像"
+
+  local tag="localhost/${PREFIX}-agent:latest"
+
+  if podman image exists "$tag" 2>/dev/null; then
+    ok "镜像 $tag 已存在（跳过构建）"
+    say "  $C_DIM如需重建：podman rmi $tag 后重新运行本脚本$C_R"
+    return 0
+  fi
+
+  if [ ! -f "$REPO_DIR/agent/Dockerfile" ]; then
+    warn "缺少 agent/Dockerfile，跳过构建"
+    return 0
+  fi
+
+  say "  构建 $tag（首次较慢，需拉取 node 基础镜像）"
+  if podman build -t "$tag" -f "$REPO_DIR/agent/Dockerfile" "$REPO_DIR/agent" >/dev/null 2>&1; then
+    ok "已构建 $tag"
+  else
+    warn "构建失败。手动查看："
+    say "    podman build -t $tag -f $REPO_DIR/agent/Dockerfile $REPO_DIR/agent"
+    warn "agent 容器将无法启动（其余服务不受影响）"
+  fi
+}
+
+# ---- 导入 DSH_HOME ----
+seed_dsh_home() {
+  step "初始化 Agent 的 DSH_HOME"
+
+  local vol="${PREFIX}-agent-dsh"
+  local src="${HOME}/.dsh"
+
+  if ! podman volume exists "$vol" 2>/dev/null; then
+    warn "卷 $vol 不存在（单元可能尚未生效），跳过"
+    return 0
+  fi
+
+  # 已有内容则绝不覆盖 —— 凭证是用户资产
+  local existing
+  existing=$(podman run --rm -v "${vol}:/t:Z" docker.io/library/alpine:3.20 \
+              sh -c 'ls -A /t 2>/dev/null | head -1' 2>/dev/null || true)
+
+  if [ -n "${existing:-}" ]; then
+    ok "DSH_HOME 已有内容，保留不动"
+    return 0
+  fi
+
+  if [ ! -f "${src}/.credentials.yaml" ]; then
+    warn "宿主 ${src}/.credentials.yaml 不存在，无法导入凭证"
+    say  "  Agent 首次启动后需在容器内登录，或手动放入 API key"
+    return 0
+  fi
+
+  say "  从 ${src} 导入 DSH_HOME（profiles + 凭证）"
+  if podman run --rm \
+       -v "${vol}:/dest:Z" \
+       -v "${src}:/src:ro,Z" \
+       docker.io/library/alpine:3.20 \
+       sh -c 'cp -a /src/. /dest/ && chown -R 1000:1000 /dest' >/dev/null 2>&1; then
+    ok "已导入（凭证现存在于卷中，未进入仓库或镜像）"
+  else
+    warn "导入失败。可手动执行："
+    say "    podman run --rm -v ${vol}:/dest:Z -v ${src}:/src:ro,Z alpine:3.20 sh -c 'cp -a /src/. /dest/'"
+  fi
+}
+
 # ---- 安装 Quadlet 单元 ----
 install_units() {
   step "安装 Quadlet 单元"
@@ -248,8 +316,10 @@ main() {
   preflight
   prepare_secrets
   sync_config
+  build_images
   install_units
   start_services
+  seed_dsh_home
 
   if wait_ready; then
     write_manifest
