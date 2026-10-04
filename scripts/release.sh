@@ -124,14 +124,18 @@ sync_version() {
       fi
     fi
 
-    # 3) 门户页脚 —— 写入一个供前端读取的文件
+    # 3) 门户版本文件
+    # 幂等：版本号未变时不重写（否则每次 --sync 都只改时间戳，平白弄脏工作区）
     local home_dir="$REPO_DIR/config/home"
+    local vfile="$home_dir/version.json"
     if [ -d "$home_dir" ]; then
       if [ "$DRY_RUN" = 1 ]; then
         dry "config/home/version.json: $ver"
+      elif [ -f "$vfile" ] && grep -qF "\"version\": \"$ver\"" "$vfile"; then
+        ok "门户版本文件已是最新（未改动）"
       else
         printf '{\n  "version": "%s",\n  "released": "%s"\n}\n' "$ver" "$(date -Iseconds)" \
-          > "$home_dir/version.json"
+          > "$vfile"
         ok "门户版本文件已生成"
       fi
     fi
