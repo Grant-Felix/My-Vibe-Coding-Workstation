@@ -107,14 +107,48 @@
 | 1 | **Home** | 本项目主页 / 功能入口门户（**纯导航 + 状态展示**，不做反向代理） | 无状态（配置驱动） | — |
 | 2 | **Agent** | AI 编码代理，默认 **DeepSeek Harness** | 会话/凭据 | **✅ 可替换**（接口化） |
 | 3 | **Forgejo** | 自托管 Git 服务 | 强状态（仓库数据） | — |
-| 4 | **Open Cloud** | 云盘 / 文件同步与协作 | 强状态 | — |
+| 4 | **OpenCloud** | 云盘 / 文件同步与协作（`opencloudeu/opencloud-rolling`） | 强状态 | — |
 | 5 | **Workbench** | 完整可用的开发系统（**可重置/可恢复/可重装**） | 需快照 | — |
 
-### 关于「Open Cloud」的标注
-> ⚠️ **待确认**：你说的「open cloud」我不确定具体指哪个产品。
-> 我的候选猜测：**Nextcloud**（最常见）、OpenCloud（ownCloud 系）、或 Sealafile。
-> 请给出准确名字 / 镜像名 —— 这会直接决定数据目录布局和卸载清单。
-> 在确认前，设计里按「一个自托管云盘服务」抽象处理。
+### OpenCloud 实测结论（已确认产品）
+
+已确认为 **OpenCloud**（`opencloud-eu`，从 ownCloud Infinite Scale 分叉的德国项目），
+**不是 Nextcloud**。官方部署参考 `opencloud-eu/opencloud-compose`。
+
+镜像与端口（来自官方 compose 实测）：
+
+| 项 | 值 |
+|---|---|
+| 主镜像 | `opencloudeu/opencloud-rolling:8.0.1` |
+| 主服务内部端口 | **9200** |
+| 反向代理 | **Traefik v3.7.12，官方注明「always enabled and can't be disabled」** |
+| 持久化 | `opencloud-config` → `/etc/opencloud`；`opencloud-data` → `/var/lib/opencloud` |
+| 运行用户 | `1000:1000` |
+
+**三条对本项目有实质影响的硬约束：**
+
+1. 🔴 **端口 8000-9999 被 OpenCloud 内部占用**
+   官方 `.env.example` 原文：
+   > *"Don't use ports in the range of 8000-9999 and 5232 as those ports are used internally"*
+   这**直接否决了**把工作站端口规划放在 8xxx/9xxx 段的方案。详见第 9 节端口规划。
+
+2. 🔴 **OpenCloud 强依赖域名 + HTTPS，而非纯端口访问**
+   它硬编码 `OC_URL: https://${OC_DOMAIN}`，并通过 Traefik 按 `Host(${OC_DOMAIN})` 路由。
+   纯 `http://localhost:port` 访问**不是官方支持的路径**。
+   → 需要在本机做 hosts 映射（如 `cloud.workstation.local`）+ 自签证书（`INSECURE=true`）。
+
+3. 🔴 **官方 Traefik 配置挂载 Docker socket**
+   `${DOCKER_SOCKET_PATH:-/var/run/docker.sock}:/var/run/docker.sock:ro`
+   → 违背第 0 节的隔离原则，且 Podman 环境下 socket 路径不同（`/run/user/1000/podman/podman.sock`）。
+   → **对策**：改用官方 `external-proxy/` 配置（假定已有反代），由我们自己的反代容器承担；
+     或自行编写 Traefik 的静态配置，**不挂 socket**（用 file provider 而非 docker provider）。
+     这是本项目需要**自行解决**的技术点，不是照抄官方 compose 就行。
+
+> 结论：容器 4 **不是一个容器，而是一个小型服务组**
+> （opencloud + traefik + 可选 collabora/keycloak）。
+> 这会显著影响卷规划、启动顺序与卸载清单。见第 9 节。
+
+
 
 ### Workbench 的环境语义
 你提到它要同时承担**开发环境 / 测试环境 / 预生产环境**。这三种语义建议用**同一套基础镜像 + 三份不同的卷/网络命名空间**实现：
@@ -211,13 +245,12 @@ uninstall.sh --nuke        # 以上 + 清理 podman 残留 (system prune)
 | D4 | 门户认证 | **不需要密码**（你的语音中先要后撤，记录为不需要） |
 | D5 | 部署机制 | Podman Quadlet + rootless 用户级 systemd（依赖已实测的 `Linger=yes`） |
 | D6 | 卸载策略 | manifest 登记清单精确回收，**禁止** `podman system prune` 式大范围操作 |
+| D7 | 容器 4 | **OpenCloud**（`opencloud-eu` / ownCloud Infinite Scale 系），非 Nextcloud |
+| D8 | 端口段 | ~~99999~~ **无效**（超出 0-65535）；改为 **7xxx 段**，见第 9 节 |
 
 ### 待确认（阻塞项）
 
-1. 🔴 **「Open Cloud」是哪个服务？** —— 候选：Nextcloud / OpenCloud / SeaFile。
-   直接决定数据目录布局与卸载清单，猜错会导致容器 4 返工。
-2. 🔴 **端口规划** —— 是否统一用某个端口段？门户需读取各服务端口来生成入口链接。
-3. 🟡 **Workbench 三环境形态** —— 我的倾向：**三个容器共享镜像层，数据卷与网络完全隔离**。
+1. 🟡 **Workbench 三环境形态** —— 我的倾向：**三个容器共享镜像层，数据卷与网络完全隔离**。
    备选：单容器 + 三种快照。前者隔离更硬，后者省资源。
 4. 🟡 **Agent 容器「可替换」的边界** —— 仅换镜像，还是需同时并存多个不同 agent 实例？
 5. 🟡 **DeepSeek Harness 的接入方式** —— 宿主已有 DSH 安装
@@ -228,7 +261,42 @@ uninstall.sh --nuke        # 以上 + 清理 podman 残留 (system prune)
 
 ---
 
-## 8. 当前进度
+## 8. 端口规划
+
+### 关于 `99999`
+
+❌ **无效端口**。TCP/UDP 端口号是 16 位无符号整数，合法范围 **0–65535**。
+`99999` 会被内核直接拒绝（`bind: Address already in use` 之外的 `EINVAL` 类错误）。
+猜测你想表达的是 **9999**（探索性端口的常见上界）。
+
+### 为什么最终不选 9xxx
+
+两个独立理由：
+
+1. **OpenCloud 内部占用 8000-9999**（官方明文警告，见 4.1）。
+2. **你机器上 `9091` 已被占用**（实测 `ss -tlnp`：`127.0.0.1:9091` 有监听，疑似 transmission）。
+   9xxx 段不是干净的。
+
+### 推荐方案：`7xxx` 段
+
+实测你当前监听端口：`53, 631, 1053, 3080, 3081, 3082, 5355, 7891, 7897, 9091, 38463`。
+**整个 7000-7499 段完全空闲**，仅需避开 7891/7897。
+
+| 服务 | 端口 | 说明 |
+|---|---|---|
+| **Home 门户** | `7000` | 入口，导航 + 状态展示 |
+| **Agent (DSH)** | `7001` | 可替换的 agent |
+| **Forgejo** | `7002` | Git 服务（SSH 另用 `7022`） |
+| **OpenCloud** | `7003` | 经自建反代；内部 9200 不暴露 |
+| **Workbench dev** | `7010` | |
+| **Workbench test** | `7011` | |
+| **Workbench staging** | `7012` | |
+
+> 全部绑定 `127.0.0.1`（仅本机可访问），除非你需要局域网访问 —— 见待确认项 6。
+
+---
+
+## 9. 当前进度
 
 - [x] 本地 git 仓库初始化
 - [x] GitHub 远程仓库创建并推送
